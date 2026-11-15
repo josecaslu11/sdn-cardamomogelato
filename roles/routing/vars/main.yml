@@ -1,0 +1,10 @@
+---
+ospf_tunnel_lines:
+  - ip ospf network broadcast
+  - "ip ospf hello-interval {{ ospf_hello }}"
+  - "ip ospf dead-interval {{ ospf_dead }}"
+  - "ip ospf {{ ospf_process }} area {{ ospf_area }}"
+  - ipv6 ospf network broadcast
+  - "ipv6 ospf hello-interval {{ ospf_hello }}"
+  - "ipv6 ospf dead-interval {{ ospf_dead }}"
+  - "ipv6 ospf {{ ospf_process }} area {{ ospf_area }}"

@@ -1,0 +1,36 @@
+---
+- name: Tunnels del spoke (una nube por hub)
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ item - 1 }}"
+    lines:
+      - "ip address {{ tunnel_ip[item] }} {{ tunnel_mask }}"
+      - no ip redirects
+      - "ip mtu {{ tunnel_mtu }}"
+      - "ip tcp adjust-mss {{ tunnel_mss }}"
+      - "ip nhrp network-id {{ item }}"
+      - "ip nhrp nhs {{ hub_tunnel[item] }} nbma {{ hub_nbma[item] }} multicast"
+      - tunnel source Ethernet0/0
+      - tunnel mode gre multipoint
+      - "tunnel key {{ item }}"
+      - tunnel vrf INET
+      - tunnel protection ipsec profile DMVPN-IPSEC shared
+      - "ipv6 address FE80::{{ site_id }} link-local"
+      - "ipv6 address {{ tunnel_v6[item] }}/64"
+      - "ipv6 mtu {{ tunnel_mtu }}"
+      - "ipv6 tcp adjust-mss {{ ipv6_mss }}"
+      - "ipv6 nhrp network-id {{ item }}"
+      - "ipv6 nhrp nhs {{ hub_tunnel_v6[item] }}"
+      - "ipv6 nhrp map {{ hub_tunnel_v6[item] }}/128 {{ hub_nbma[item] }}"
+      - "ipv6 nhrp map {{ hub_ll[item] }}/128 {{ hub_nbma[item] }}"
+      - "ipv6 nhrp map multicast {{ hub_nbma[item] }}"
+    save_when: modified
+  loop: [1, 2]
+
+- name: NHRP shortcut (IOL no lo muestra en running-config)
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ item - 1 }}"
+    lines:
+      - ip nhrp shortcut
+      - ipv6 nhrp shortcut
+  loop: [1, 2]
+  changed_when: false

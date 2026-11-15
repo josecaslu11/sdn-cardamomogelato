@@ -1,0 +1,18 @@
+---
+- name: Interfaz LAN encendida
+  cisco.ios.ios_interfaces:
+    config:
+      - name: "{{ lan_if }}"
+        enabled: true
+  when: "'spokes' in group_names"
+
+- name: Direccionamiento de la LAN (dual stack) y OSPF
+  cisco.ios.ios_config:
+    parents: "interface {{ lan_if }}"
+    lines:
+      - "ip address {{ lan_v4_gw }} 255.255.255.0"
+      - "ipv6 address {{ lan_v6_gw }}/64"
+      - "ip ospf {{ ospf_process }} area {{ ospf_area }}"
+      - "ipv6 ospf {{ ospf_process }} area {{ ospf_area }}"
+    save_when: modified
+  when: "'spokes' in group_names"

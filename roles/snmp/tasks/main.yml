@@ -1,0 +1,40 @@
+---
+- name: ACL de acceso SNMP
+  cisco.ios.ios_config:
+    parents: ip access-list standard ZBX-SNMP
+    lines:
+      - permit 172.16.0.251
+      - permit 172.16.0.250
+    save_when: modified
+
+- name: Vista, grupo y datos generales de SNMP
+  cisco.ios.ios_config:
+    lines:
+      - snmp-server view SDN-VIEW iso included
+      - snmp-server group SDN-GRP v3 priv read SDN-VIEW access ZBX-SNMP
+      - snmp-server ifindex persist
+      - "snmp-server location {{ site_name }}"
+      - snmp-server contact Proyecto-SDN
+    save_when: modified
+
+- name: Usuarios SNMPv3 existentes
+  cisco.ios.ios_command:
+    commands:
+      - show snmp user
+  register: snmp_users
+  changed_when: false
+  failed_when: false
+
+- name: Usuario SNMPv3
+  cisco.ios.ios_config:
+    lines:
+      - "snmp-server user {{ snmp_user }} SDN-GRP v3 auth sha {{ vault_snmp_auth }} priv aes 128 {{ vault_snmp_priv }}"
+    save_when: modified
+  when: "('User name: ' ~ snmp_user) not in (snmp_users.stdout | default(['']) | first)"
+  no_log: true
+
+- name: Guardar configuracion (el usuario SNMPv3 no aparece en running-config)
+  cisco.ios.ios_command:
+    commands:
+      - write memory
+  changed_when: false

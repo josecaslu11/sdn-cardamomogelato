@@ -1,0 +1,6 @@
+---
+- name: Validar rol ipsec
+  hosts: routers
+  gather_facts: false
+  roles:
+    - ipsec

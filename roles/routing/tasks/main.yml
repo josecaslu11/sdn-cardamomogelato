@@ -1,0 +1,44 @@
+---
+- name: Proceso OSPFv2
+  cisco.ios.ios_config:
+    parents: "router ospf {{ ospf_process }}"
+    lines:
+      - "router-id {{ loopback_ip }}"
+    save_when: modified
+
+- name: Proceso OSPFv3
+  cisco.ios.ios_config:
+    parents: "ipv6 router ospf {{ ospf_process }}"
+    lines:
+      - "router-id {{ loopback_ip }}"
+    save_when: modified
+
+- name: OSPF en Loopback0
+  cisco.ios.ios_config:
+    parents: interface Loopback0
+    lines:
+      - "ip ospf {{ ospf_process }} area {{ ospf_area }}"
+    save_when: modified
+
+- name: OSPF en el tunel del hub
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ hub_index - 1 }}"
+    lines: "{{ ospf_tunnel_lines + ['ip ospf priority 255', 'ipv6 ospf priority 255'] }}"
+    save_when: modified
+  when: "'hubs' in group_names"
+
+- name: OSPF en los tuneles del spoke
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ item - 1 }}"
+    lines: "{{ ospf_tunnel_lines + ['ip ospf priority 0', 'ip ospf cost ' ~ (item * 10), 'ipv6 ospf priority 0', 'ipv6 ospf cost ' ~ (item * 10)] }}"
+    save_when: modified
+  loop: [1, 2]
+  when: "'spokes' in group_names"
+
+- name: LAN pasiva en OSPFv2
+  cisco.ios.ios_config:
+    parents: "router ospf {{ ospf_process }}"
+    lines:
+      - "passive-interface {{ lan_if }}"
+    save_when: modified
+  when: "'spokes' in group_names"

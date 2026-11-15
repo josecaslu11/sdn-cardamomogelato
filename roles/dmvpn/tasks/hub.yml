@@ -1,0 +1,31 @@
+---
+- name: Tunnel del hub (IPv4 e IPv6)
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ hub_index - 1 }}"
+    lines:
+      - "ip address {{ tunnel_ip[hub_index] }} {{ tunnel_mask }}"
+      - no ip redirects
+      - "ip mtu {{ tunnel_mtu }}"
+      - "ip tcp adjust-mss {{ tunnel_mss }}"
+      - "ip nhrp network-id {{ hub_index }}"
+      - ip nhrp redirect
+      - tunnel source Ethernet0/0
+      - tunnel mode gre multipoint
+      - "tunnel key {{ hub_index }}"
+      - tunnel vrf INET
+      - tunnel protection ipsec profile DMVPN-IPSEC shared
+      - "ipv6 address {{ hub_ll[hub_index] }} link-local"
+      - "ipv6 address {{ tunnel_v6[hub_index] }}/64"
+      - "ipv6 mtu {{ tunnel_mtu }}"
+      - "ipv6 tcp adjust-mss {{ ipv6_mss }}"
+      - "ipv6 nhrp network-id {{ hub_index }}"
+      - ipv6 nhrp redirect
+    save_when: modified
+
+- name: NHRP multicast dinamico (IOL no lo muestra en running-config)
+  cisco.ios.ios_config:
+    parents: "interface Tunnel{{ hub_index - 1 }}"
+    lines:
+      - ip nhrp map multicast dynamic
+      - ipv6 nhrp map multicast dynamic
+  changed_when: false

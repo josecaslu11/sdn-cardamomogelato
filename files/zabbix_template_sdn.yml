@@ -1,0 +1,65 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 1aac795413154ebc8421e4037caeee0c
+      name: Templates/SDN
+  templates:
+    - uuid: 6f69409e68e34667b5aa782e459b93b4
+      template: SDN OSPF y Tuneles
+      name: SDN OSPF y Tuneles
+      description: Vecinos OSPF y estado de tuneles DMVPN por SNMP
+      groups:
+        - name: Templates/SDN
+      discovery_rules:
+        - uuid: c218c086be4a4758ba715d2fcb38ee1d
+          name: Vecinos OSPF
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#OSPFNBR},1.3.6.1.2.1.14.10.1.6]'
+          key: ospf.nbr.discovery
+          lifetime_type: DELETE_AFTER
+          lifetime: 30d
+          enabled_lifetime_type: DISABLE_NEVER
+          delay: 1m
+          item_prototypes:
+            - uuid: bf71600739564cbfaf92833e943b087e
+              name: 'Estado del vecino OSPF {#SNMPINDEX}'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.14.10.1.6.{#SNMPINDEX}'
+              key: 'ospf.nbr.state[{#SNMPINDEX}]'
+              delay: 30s
+              history: 7d
+              trends: '0'
+              trigger_prototypes:
+                - uuid: 95a57cbc0a8949bf8ac45a8ed60956de
+                  expression: 'last(/SDN OSPF y Tuneles/ospf.nbr.state[{#SNMPINDEX}])<>8'
+                  name: 'OSPF: vecino {#SNMPINDEX} no esta en Full en {HOST.NAME}'
+                  priority: HIGH
+                - uuid: 610c13107ad84f48a20c217dd80ab635
+                  expression: 'nodata(/SDN OSPF y Tuneles/ospf.nbr.state[{#SNMPINDEX}],1m)=1'
+                  name: 'OSPF: sin datos del vecino {#SNMPINDEX} en {HOST.NAME}'
+                  priority: HIGH
+        - uuid: 1ec05b93370f4ed392c2d8e572069f6c
+          name: Tuneles DMVPN
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#IFNAME},1.3.6.1.2.1.31.1.1.1.1]'
+          key: tunnel.discovery
+          delay: 1m
+          filter:
+            conditions:
+              - macro: '{#IFNAME}'
+                value: ^Tu
+                formulaid: A
+          item_prototypes:
+            - uuid: 3f2c932f3ea8465a979fd7b765ffd64f
+              name: 'Estado operativo de {#IFNAME}'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}'
+              key: 'tunnel.oper[{#SNMPINDEX}]'
+              delay: 30s
+              history: 7d
+              trends: '0'
+              trigger_prototypes:
+                - uuid: eaf0cd43e0da4784a03cc6bf1274d490
+                  expression: 'last(/SDN OSPF y Tuneles/tunnel.oper[{#SNMPINDEX}])<>1'
+                  name: 'Tunel {#IFNAME} no esta up en {HOST.NAME}'
+                  priority: HIGH

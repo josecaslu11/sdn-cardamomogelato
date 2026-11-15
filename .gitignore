@@ -1,0 +1,6 @@
+backup/
+*.retry
+.vault_pass
+inventory/group_vars/all/vault.yml
+_pycache_/
+*.pyc

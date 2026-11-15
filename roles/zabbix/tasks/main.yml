@@ -1,0 +1,33 @@
+---
+- name: Alta del host en Zabbix (SNMPv3)
+  community.zabbix.zabbix_host:
+    host_name: "{{ inventory_hostname }}"
+    visible_name: "{{ inventory_hostname }} - {{ site_name }}"
+    host_groups: "{{ ['Hubs'] if 'hubs' in group_names else ['Sucursales'] }}"
+    link_templates:
+      - Cisco IOS by SNMP
+      - SDN OSPF y Tuneles
+    status: enabled
+    state: present
+    tags:
+      - tag: sitio
+        value: "{{ inventory_hostname }}"
+    interfaces:
+      - type: 2
+        main: 1
+        useip: 1
+        ip: "{{ ansible_host }}"
+        dns: ""
+        port: "161"
+        details:
+          version: 3
+          bulk: 1
+          securityname: "{{ snmp_user }}"
+          contextname: ""
+          securitylevel: 2
+          authprotocol: 1
+          authpassphrase: "{{ vault_snmp_auth }}"
+          privprotocol: 1
+          privpassphrase: "{{ vault_snmp_priv }}"
+  delegate_to: zabbix
+  no_log: "{{ not (debug_zabbix | default(false)) }}"

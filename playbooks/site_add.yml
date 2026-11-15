@@ -1,0 +1,11 @@
+---
+- name: Provisionar router (hubs y spokes)
+  hosts: routers
+  gather_facts: false
+  roles:
+    - ipsec
+    - dmvpn
+    - lan
+    - routing
+    - snmp
+    - zabbix

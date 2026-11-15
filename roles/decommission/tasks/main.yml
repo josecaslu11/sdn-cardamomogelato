@@ -1,0 +1,93 @@
+---
+- name: Proteccion (solo spokes y siempre con --limit)
+  ansible.builtin.assert:
+    that:
+      - ansible_limit is defined
+      - "'spokes' in group_names"
+    fail_msg: "Ejecuta con -l R<n> y solo sobre spokes"
+
+- name: Estado actual del router
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config | include ^interface Tunnel|^router ospf|^ipv6 router ospf|^crypto"
+      - "show running-config interface {{ lan_if }}"
+  register: estado
+  changed_when: false
+
+- name: Eliminar tuneles
+  cisco.ios.ios_config:
+    lines:
+      - "no interface Tunnel{{ item }}"
+    save_when: modified
+  loop: [0, 1]
+  when: "('interface Tunnel' ~ item) in estado.stdout[0]"
+
+- name: Eliminar OSPFv2 y OSPFv3
+  cisco.ios.ios_config:
+    lines:
+      - "no router ospf {{ ospf_process }}"
+      - "no ipv6 router ospf {{ ospf_process }}"
+    save_when: modified
+  when: "'router ospf' in estado.stdout[0]"
+
+- name: Limpiar la interfaz LAN
+  cisco.ios.ios_config:
+    lines:
+      - "default interface {{ lan_if }}"
+    save_when: modified
+  when: "'ip address' in estado.stdout[1]"
+
+- name: Eliminar objetos IKEv2 e IPsec
+  cisco.ios.ios_config:
+    lines:
+      - no crypto ipsec profile DMVPN-IPSEC
+      - no crypto ipsec transform-set DMVPN-TS
+      - no crypto ikev2 profile DMVPN-PROF
+      - no crypto ikev2 keyring DMVPN-KEYS
+      - no crypto ikev2 policy DMVPN-POL
+      - no crypto ikev2 proposal DMVPN-PROP
+    save_when: modified
+  when: "'crypto ikev2 profile' in estado.stdout[0]"
+
+- name: Limpiar NHRP del sitio en el hub 1
+  cisco.ios.ios_command:
+    commands:
+      - "clear ip nhrp {{ tunnel_ip[1] }}"
+      - "clear crypto session remote {{ underlay_ip }}"
+  delegate_to: R1
+
+- name: Limpiar NHRP del sitio en el hub 2
+  cisco.ios.ios_command:
+    commands:
+      - "clear ip nhrp {{ tunnel_ip[2] }}"
+      - "clear crypto session remote {{ underlay_ip }}"
+  delegate_to: R2
+
+- name: Apagar la interfaz LAN del sitio retirado
+  cisco.ios.ios_interfaces:
+    config:
+      - name: "{{ lan_if }}"
+        enabled: false
+
+- name: Quitar usuario SNMPv3 del sitio retirado
+  cisco.ios.ios_config:
+    lines:
+      - "no snmp-server user {{ snmp_user }} SDN-GRP v3"
+    save_when: modified
+  no_log: true
+
+- name: Quitar grupo, vista y ACL de SNMP
+  cisco.ios.ios_config:
+    lines:
+      - no snmp-server group SDN-GRP v3 priv
+      - no snmp-server view SDN-VIEW iso
+      - no snmp-server location
+      - no snmp-server contact
+      - no ip access-list standard ZBX-SNMP
+    save_when: modified
+
+- name: Eliminar el host de Zabbix
+  community.zabbix.zabbix_host:
+    host_name: "{{ inventory_hostname }}"
+    state: absent
+  delegate_to: zabbix

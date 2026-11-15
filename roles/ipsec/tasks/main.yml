@@ -1,0 +1,55 @@
+---
+- name: IKEv2 proposal
+  cisco.ios.ios_config:
+    parents: crypto ikev2 proposal DMVPN-PROP
+    lines:
+      - encryption aes-cbc-256
+      - integrity sha256
+      - group 14
+    save_when: modified
+
+- name: IKEv2 policy
+  cisco.ios.ios_config:
+    parents: crypto ikev2 policy DMVPN-POL
+    lines:
+      - match fvrf INET
+      - proposal DMVPN-PROP
+    save_when: modified
+
+- name: IKEv2 keyring (PSK desde el vault)
+  cisco.ios.ios_config:
+    parents:
+      - crypto ikev2 keyring DMVPN-KEYS
+      - peer ANY
+    lines:
+      - address 0.0.0.0 0.0.0.0
+      - "pre-shared-key {{ vault_ipsec_psk }}"
+    save_when: modified
+  no_log: true
+
+- name: IKEv2 profile
+  cisco.ios.ios_config:
+    parents: crypto ikev2 profile DMVPN-PROF
+    lines:
+      - match fvrf INET
+      - match identity remote address 0.0.0.0
+      - authentication remote pre-share
+      - authentication local pre-share
+      - keyring local DMVPN-KEYS
+      - "dpd {{ ike_dpd_interval }} {{ ike_dpd_retries }} periodic"
+    save_when: modified
+
+- name: IPsec transform-set
+  cisco.ios.ios_config:
+    parents: crypto ipsec transform-set DMVPN-TS esp-aes 256 esp-sha256-hmac
+    lines:
+      - mode transport
+    save_when: modified
+
+- name: IPsec profile
+  cisco.ios.ios_config:
+    parents: crypto ipsec profile DMVPN-IPSEC
+    lines:
+      - set transform-set DMVPN-TS
+      - set ikev2-profile DMVPN-PROF
+    save_when: modified

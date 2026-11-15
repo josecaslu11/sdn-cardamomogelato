@@ -1,0 +1,6 @@
+---
+- name: Baja de un sitio (spoke)
+  hosts: spokes
+  gather_facts: false
+  roles:
+    - decommission

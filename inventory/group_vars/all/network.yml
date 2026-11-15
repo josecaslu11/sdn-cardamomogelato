@@ -1,0 +1,27 @@
+birthday_day: 11
+ipv6_prefix: "2001:1111"
+
+tunnel_mask: "255.255.255.0"
+tunnel_mtu: 1400
+tunnel_mss: 1360
+ipv6_mss: 1340
+ospf_process: 1
+ospf_area: 0
+ospf_hello: 5
+ospf_dead: 15
+ike_dpd_interval: 10
+ike_dpd_retries: 3
+
+hub_nbma: {1: "172.16.0.1", 2: "172.16.0.2"}
+hub_tunnel: {1: "10.255.1.1", 2: "10.255.2.2"}
+hub_tunnel_v6: {1: "2001:1111:FF01::1", 2: "2001:1111:FF02::2"}
+hub_ll: {1: "FE80::1", 2: "FE80::2"}
+
+ansible_host: "{{ underlay_ip }}"
+underlay_ip: "172.16.0.{{ site_id }}"
+loopback_ip: "10.254.0.{{ site_id }}"
+tunnel_ip: {1: "10.255.1.{{ site_id }}", 2: "10.255.2.{{ site_id }}"}
+tunnel_v6: {1: "2001:1111:FF01::{{ site_id }}", 2: "2001:1111:FF02::{{ site_id }}"}
+lan_v4_gw: "10.{{ birthday_day + site_id }}.0.1"
+lan_v6_gw: "{{ ipv6_prefix }}:{{ site_id }}::1"
+snmp_user: zabbix

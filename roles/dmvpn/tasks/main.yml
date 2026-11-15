@@ -1,0 +1,14 @@
+---
+- name: IPv6 habilitado
+  cisco.ios.ios_config:
+    lines:
+      - ipv6 unicast-routing
+    save_when: modified
+
+- name: Tareas de hub
+  ansible.builtin.include_tasks: hub.yml
+  when: "'hubs' in group_names"
+
+- name: Tareas de spoke
+  ansible.builtin.include_tasks: spoke.yml
+  when: "'spokes' in group_names"

@@ -1,0 +1,9 @@
+---
+- name: Importar la plantilla propia en Zabbix
+  hosts: zabbix_server
+  gather_facts: false
+  tasks:
+    - name: Plantilla SDN OSPF y Tuneles
+      community.zabbix.zabbix_template:
+        template_yaml: "{{ lookup('file', playbook_dir ~ '/../files/zabbix_template_sdn.yml') }}"
+        state: present

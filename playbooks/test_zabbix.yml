@@ -1,0 +1,11 @@
+---
+- name: Probar la API de Zabbix y crear grupos
+  hosts: zabbix_server
+  gather_facts: false
+  tasks:
+    - name: Grupos de hosts
+      community.zabbix.zabbix_group:
+        host_groups:
+          - Hubs
+          - Sucursales
+        state: present

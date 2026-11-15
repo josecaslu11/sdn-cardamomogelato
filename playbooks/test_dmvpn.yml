@@ -1,0 +1,7 @@
+---
+- name: Validar roles ipsec y dmvpn
+  hosts: routers
+  gather_facts: false
+  roles:
+    - ipsec
+    - dmvpn

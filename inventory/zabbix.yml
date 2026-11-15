@@ -1,0 +1,7 @@
+---
+all:
+  children:
+    zabbix_server:
+      hosts:
+        zabbix:
+          ansible_host: 172.16.0.251
