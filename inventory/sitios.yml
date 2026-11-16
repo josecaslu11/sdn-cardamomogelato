@@ -2,5 +2,4 @@
 all:
   children:
     spokes:
-      hosts:
-        R7:
+      hosts: {}
