@@ -3,11 +3,13 @@ from hmac import compare_digest
 from os import getenv
 from pathlib import Path
 from secrets import token_hex
+import sqlite3
 
 from dotenv import dotenv_values
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 
-from db import detalle_sitio, initialize, listado_ipam, resumen_sitios
+from ansible_files import AnsibleFiles, InventoryError, dynamic_inventory, host_vars
+from db import detalle_sitio, initialize, listado_ipam, resumen_sitios, vista_inventario
 from ipam import IPAM, SITE_CODE, SITE_NAME
 
 
@@ -44,6 +46,9 @@ def create_app(env_file=None, *, database=None, config_file=None):
         config_file if config_file is not None else getenv("PORTAL_CONFIG_PATH", settings.get("PORTAL_CONFIG_PATH")),
     )
     initialize(ipam.database)
+    files = AnsibleFiles(ipam.config_file, lambda name, default=None: getenv(
+        name, settings.get(name, default)
+    ))
 
     @app.get("/")
     @login_required
@@ -59,7 +64,16 @@ def create_app(env_file=None, *, database=None, config_file=None):
         if detalle is None:
             return render_template("site_not_found.html"), 404
         sitio, asignaciones = detalle
-        return render_template("site_detail.html", sitio=sitio, asignaciones=asignaciones)
+        registrados = vista_inventario(ipam.database)
+        publicado = next((row for row in registrados if row["id"] == sitio_id), None)
+        return render_template(
+            "site_detail.html",
+            sitio=sitio,
+            asignaciones=asignaciones,
+            inventario_yaml=dynamic_inventory(registrados),
+            host_vars_yaml=host_vars(publicado) if publicado is not None else None,
+            dry_run=files.dry_run,
+        )
 
     @app.get("/ipam")
     @login_required
@@ -75,6 +89,7 @@ def create_app(env_file=None, *, database=None, config_file=None):
     def new_site():
         valores = {"nombre": "", "codigo": "", "lan_if": LAN_INTERFACES[0]}
         error = None
+        status = 400
         if "csrf_token" not in session:
             session["csrf_token"] = token_hex(32)
         if request.method == "POST":
@@ -87,7 +102,13 @@ def create_app(env_file=None, *, database=None, config_file=None):
                 error = "Selecciona una interfaz LAN de la lista."
             else:
                 try:
-                    sitio = ipam.reservar_sitio(**valores, usuario=username)
+                    sitio = files.reserve(ipam, valores, username)
+                except (OSError, sqlite3.Error, InventoryError) as exc:
+                    app.logger.error("Error al guardar los archivos de alta (%s).", type(exc).__name__)
+                    error = "No se pudo guardar el inventario. La reserva no se completó."
+                    if isinstance(exc, InventoryError):
+                        error += f" {exc}"
+                    status = 500
                 except ValueError as exc:
                     error = str(exc)
                 else:
@@ -100,7 +121,7 @@ def create_app(env_file=None, *, database=None, config_file=None):
             interfaces=LAN_INTERFACES,
             patron_nombre=SITE_NAME.pattern.replace("-]", r"\-]"),
             patron_codigo=SITE_CODE.pattern.replace("-]", r"\-]"),
-        ), 400 if error else 200
+        ), status if error else 200
 
     @app.route("/login", methods=["GET", "POST"])
     def login():

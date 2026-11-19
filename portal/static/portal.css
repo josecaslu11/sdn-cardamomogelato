@@ -111,3 +111,14 @@ tbody tr + tr { border-top: 1px solid var(--line); }
 }
 .filters .field { flex: 1 1 10rem; margin-bottom: 0; }
 .filters > a { align-self: center; }
+
+.config-preview { margin-top: 1rem; }
+.config-preview h2 { margin-top: 0; }
+.config-preview details + details { margin-top: .65rem; }
+.config-preview summary { cursor: pointer; }
+.config-preview pre {
+    overflow-x: auto;
+    padding: .85rem;
+    border-radius: .45rem;
+    background: #e9f1ed;
+}

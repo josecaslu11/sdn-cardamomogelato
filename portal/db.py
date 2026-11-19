@@ -140,3 +140,19 @@ def listado_ipam(database, *, router="", recurso="", estado=""):
             {"router": router, "recurso": recurso, "estado": estado},
         ).fetchall()
     return asignaciones, opciones
+
+
+def sitios_inventario(db):
+    return db.execute(
+        """SELECT s.id, s.router, s.site_id, s.site_name, s.lan_if
+           FROM sites AS s JOIN nodes AS n ON n.router = s.router
+           WHERE n.gestionado = 1 AND s.liberado_en IS NULL
+             AND s.estado IN ('aprovisionando', 'activo', 'retirando', 'fallido')
+           ORDER BY s.site_id"""
+    ).fetchall()
+
+
+def vista_inventario(database):
+    with closing(sqlite3.connect(database)) as db:
+        db.row_factory = sqlite3.Row
+        return sitios_inventario(db)

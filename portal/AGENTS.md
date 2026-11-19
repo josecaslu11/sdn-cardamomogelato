@@ -153,7 +153,8 @@ Al finalizar:
 - Paso 1: aplicación Flask con login completado.
 - Paso 2: IPAM y SQLite completado.
 - Paso 3: formulario y listado de sitios completado.
-- Paso actual: Paso 4, detalle de sitios y asignaciones IPAM.
+- Paso 4: detalle de sitios y asignaciones IPAM completado.
+- Paso actual: Paso 5, generación de archivos para Ansible.
 - Pendiente: integración real con Ansible.
 
 ## Documentación de referencia

@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -56,8 +57,8 @@ class IPAM:
         self.database = database if database is not None else os.getenv(
             "PORTAL_DB_PATH", ROOT / "portal.sqlite3"
         )
-        config_path = config_file or os.getenv("PORTAL_CONFIG_PATH", ROOT / "config.yml")
-        with Path(config_path).open(encoding="utf-8") as config:
+        self.config_file = Path(config_file or os.getenv("PORTAL_CONFIG_PATH", ROOT / "config.yml"))
+        with self.config_file.open(encoding="utf-8") as config:
             settings = yaml.safe_load(config)
         self.day = settings["birthday_day"]
         self.month_day = str(settings["birthday_month_day"])
@@ -93,12 +94,13 @@ class IPAM:
         with transaction(self.database) as db:
             return self._liberar_vencidos(db, self._ahora().isoformat(), usuario)
 
-    def reservar_sitio(self, nombre, codigo, lan_if=None, *, usuario="sistema"):
+    def reservar_sitio(self, nombre, codigo, lan_if=None, *, usuario="sistema", conexion=None):
         if not isinstance(nombre, str) or not SITE_NAME.fullmatch(nombre):
             raise ValueError("El nombre debe tener entre 2 y 20 letras, números o guiones.")
         if not isinstance(codigo, str) or not SITE_CODE.fullmatch(codigo):
             raise ValueError("El código solo admite letras, números y guiones.")
-        with transaction(self.database) as db:
+        reserva = transaction(self.database) if conexion is None else nullcontext(conexion)
+        with reserva as db:
             fecha = self._ahora().isoformat()
             if db.execute("SELECT 1 FROM sites WHERE codigo = ?", (codigo,)).fetchone():
                 raise ValueError("El código ya existe.")

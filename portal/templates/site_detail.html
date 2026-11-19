@@ -32,4 +32,18 @@
         <h2>Qué se hizo</h2>
     </aside>
 </div>
+<section class="panel config-preview">
+    <h2>Archivos para Ansible</h2>
+    {% if dry_run %}<p>Modo de desarrollo · inventario aislado</p>{% endif %}
+    {% if host_vars_yaml %}
+    <details>
+        <summary>inventory/host_vars/{{ sitio.router }}.yml</summary>
+        <pre>{{ host_vars_yaml }}</pre>
+    </details>
+    {% endif %}
+    <details>
+        <summary>inventory/sitios.yml</summary>
+        <pre>{{ inventario_yaml }}</pre>
+    </details>
+</section>
 {% endblock %}

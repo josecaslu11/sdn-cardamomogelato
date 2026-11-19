@@ -19,7 +19,9 @@ def ipam(tmp_path):
 
 
 @pytest.fixture
-def client(tmp_path, ipam):
+def client(tmp_path, ipam, monkeypatch):
+    monkeypatch.setenv("PORTAL_DRY_RUN", "1")
+    monkeypatch.setenv("PORTAL_DRY_RUN_DIR", str(tmp_path / "ansible-dev"))
     env_file = tmp_path / ".env"
     env_file.write_text("PORTAL_USER=prueba\nPORTAL_PASSWORD=contraseña\n", encoding="utf-8")
     instance, config = ipam
@@ -233,3 +235,28 @@ def test_detalle_e_ipam_preservan_historial_del_router(autenticado, ipam):
     assert pagina.count("<code>10.18.0.0/24</code>") == 2
     assert "status-reservado" in pagina
     assert "status-liberado" in pagina
+
+
+def test_vista_previa_yaml_en_detalle(autenticado):
+    assert reservar(autenticado).status_code == 303
+    pagina = autenticado.get("/sitios/5").get_data(as_text=True)
+    assert "inventory/host_vars/R7.yml" in pagina
+    assert "inventory/sitios.yml" in pagina
+    assert "site_id: 7" in pagina
+    assert "site_name: Escuintla" in pagina
+    assert "Modo de desarrollo" in pagina
+
+
+def test_error_de_escritura_muestra_mensaje_y_permite_reintentar(autenticado, monkeypatch):
+    from ansible_files import AnsibleFiles
+
+    def fail(*args):
+        raise OSError("Fallo simulado")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AnsibleFiles, "publish", fail)
+        response = reservar(autenticado)
+    assert response.status_code == 500
+    assert "La reserva no se completó" in response.get_data(as_text=True)
+    assert reservar(autenticado).status_code == 303
+    assert "inventory/host_vars/R7.yml" in autenticado.get("/sitios/5").get_data(as_text=True)

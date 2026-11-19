@@ -79,3 +79,45 @@ para ver `2001:1111:7::/64`. **Limpiar filtros** vuelve a mostrar todas las
 asignaciones. Si se reutiliza un router después de la cuarentena, las
 asignaciones históricas siguen visibles con estado **Liberado** y su
 enlace abre la ficha original.
+
+## Archivos para Ansible
+
+El alta publica `inventory/host_vars/Rn.yml` con `site_id`, `site_name` y
+`lan_if`. Reconstruye `inventory/sitios.yml` desde SQLite con los routers
+gestionados en aprovisionamiento, activos, en retirada o con una operación
+fallida. Un router retirado queda fuera del inventario dinámico.
+
+Para comprobar los YAML, inicia el portal con una base y un directorio de
+desarrollo nuevos:
+
+```bash
+export PORTAL_DB_PATH="$(mktemp -d)/ipam.sqlite3"
+export PORTAL_DRY_RUN=1
+export PORTAL_DRY_RUN_DIR="$(mktemp -d)"
+python seed.py
+python -m flask --app app run
+```
+
+Registra **Escuintla** y **Jutiapa**. Abre su ficha y expande las vistas
+previas en **Archivos para Ansible**. En otra terminal, sustituye la ruta por
+el valor de `PORTAL_DRY_RUN_DIR` de la terminal donde arrancaste el portal.
+Puedes imprimir ese valor antes de iniciar Flask con
+`echo "$PORTAL_DRY_RUN_DIR"`.
+
+```bash
+cat "$PORTAL_DRY_RUN_DIR/inventory/host_vars/R7.yml"
+cat "$PORTAL_DRY_RUN_DIR/inventory/sitios.yml"
+```
+
+El primer archivo debe contener las tres variables de Escuintla. El segundo
+debe listar R7 y R8 una vez cada uno en `all.children.spokes.hosts`.
+
+El modo de desarrollo es el predeterminado y escribe en `.ansible-dev/`
+si no se define `PORTAL_DRY_RUN_DIR`. Para una VM autorizada,
+`PORTAL_DRY_RUN=0` habilita la publicación en `inventory/` bajo
+`PORTAL_ANSIBLE_DIR` o bajo `ansible_dir` de `config.yml`. Las rutas relativas
+se resuelven desde `portal/`.
+
+Los archivos se reemplazan atómicamente de forma individual. Si falla una
+escritura, se restauran los archivos publicados durante esa alta y se revierte
+la reserva. Day-0 queda pendiente de la plantilla oficial.
