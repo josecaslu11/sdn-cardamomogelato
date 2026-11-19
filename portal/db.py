@@ -71,3 +71,26 @@ def transaction(database):
             yield db
     finally:
         db.close()
+
+
+def resumen_sitios(database):
+    with closing(sqlite3.connect(database)) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN")
+        sitios = db.execute(
+            """SELECT s.site_name, s.router, s.site_id, s.estado,
+                      v4.valor AS lan_v4, v6.valor AS lan_v6
+               FROM sites AS s
+               LEFT JOIN allocations AS v4 ON v4.sitio_id = s.id AND v4.recurso = 'lan_v4'
+               LEFT JOIN allocations AS v6 ON v6.sitio_id = s.id AND v6.recurso = 'lan_v6'
+               ORDER BY s.site_id, s.id DESC"""
+        ).fetchall()
+        indicadores = db.execute(
+            """SELECT
+                   (SELECT COUNT(*) FROM sites WHERE estado = 'activo') AS activos,
+                   (SELECT COUNT(*) FROM nodes
+                    WHERE gestionado = 1 AND estado = 'disponible') AS disponibles,
+                   (SELECT COUNT(*) FROM sites WHERE estado = 'aprovisionando')
+                       AS aprovisionando"""
+        ).fetchone()
+    return sitios, indicadores

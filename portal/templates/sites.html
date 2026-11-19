@@ -1,16 +1,49 @@
-<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Lista de sitios · SDN Cardamomo Gelato</title>
-</head>
-<body>
-    <main>
-        <h1>Lista de sitios</h1>
-        <form method="post" action="{{ url_for('logout') }}">
-            <button type="submit">Cerrar sesión</button>
-        </form>
-    </main>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Lista de sitios{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1>Lista de sitios</h1>
+    <a class="button" href="{{ url_for('new_site') }}">Nuevo sitio</a>
+</div>
+
+{% for mensaje in get_flashed_messages() %}
+<p class="notice" role="status">{{ mensaje }}</p>
+{% endfor %}
+
+<dl class="metrics">
+    <div><dt>Sitios activos</dt><dd id="activos">{{ indicadores.activos }}</dd></div>
+    <div><dt>Routers disponibles</dt><dd id="disponibles">{{ indicadores.disponibles }}</dd></div>
+    <div><dt>En aprovisionamiento</dt><dd id="aprovisionando">{{ indicadores.aprovisionando }}</dd></div>
+</dl>
+
+{% if sitios %}
+<div class="table-wrap" role="region" aria-label="Sitios registrados" tabindex="0">
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Nombre</th>
+                <th scope="col">Router</th>
+                <th scope="col">N.º de sitio</th>
+                <th scope="col">LAN IPv4</th>
+                <th scope="col">LAN IPv6</th>
+                <th scope="col">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sitio in sitios %}
+            <tr>
+                <th scope="row">{{ sitio.site_name }}</th>
+                <td>{{ sitio.router }}</td>
+                <td>{{ sitio.site_id }}</td>
+                <td><code>{{ sitio.lan_v4 or '—' }}</code></td>
+                <td><code>{{ sitio.lan_v6 or '—' }}</code></td>
+                <td><span class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="panel">Todavía no hay sitios registrados.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,76 @@
+:root {
+    color: #142b29;
+    background: #f4f7f5;
+    font: 1rem/1.5 system-ui, sans-serif;
+    --line: #d3dfd9;
+    --accent: #176052;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.container { width: min(100% - 2rem, 70rem); margin-inline: auto; }
+.topbar { background: #102f2b; color: #fff; }
+.topbar-content, .page-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+.topbar-content { padding-block: .9rem; }
+.brand { font-weight: 700; }
+main { padding-block: clamp(1.25rem, 4vw, 3rem); }
+h1 { margin: .2rem 0 .75rem; font-size: clamp(1.65rem, 4vw, 2.4rem); }
+a { color: var(--accent); }
+.button {
+    display: inline-block;
+    padding: .55rem .95rem;
+    border: 1px solid transparent;
+    border-radius: .5rem;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 650;
+    text-decoration: none;
+}
+.button:hover { background: #11483e; }
+.secondary { border-color: #a1c7bb; background: transparent; }
+:focus-visible { outline: 3px solid #287ebe; outline-offset: 3px; }
+.metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: .8rem;
+    margin-block: 1rem 1.5rem;
+}
+.metrics div, .panel, .table-wrap {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: .65rem;
+}
+.metrics div, .panel { padding: 1rem; }
+.metrics dt, small { color: #435b55; }
+.metrics dd { margin: 0; font-size: 1.8rem; font-weight: 700; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: .8rem 1rem; white-space: nowrap; }
+thead { background: #e9f1ed; }
+tbody tr + tr { border-top: 1px solid var(--line); }
+.status { display: inline-block; border-radius: 1rem; padding: .2rem .65rem; font-size: .875rem; }
+.status-activo, .notice { background: #d8f2e3; color: #164c31; }
+.status-aprovisionando { background: #dcecff; color: #164475; }
+.status-fallido, .notice.error { background: #fbe1df; color: #812325; }
+.status-retirado { background: #e9ebed; color: #424852; }
+.status-retirando { background: #fff0ce; color: #674400; }
+.notice { padding: .7rem .9rem; border-radius: .45rem; }
+.form-panel { max-width: 34rem; }
+.field { display: grid; gap: .3rem; margin-bottom: 1rem; }
+.field label { font-weight: 650; }
+.field input, .field select {
+    width: 100%;
+    border: 1px solid #849b93;
+    border-radius: .4rem;
+    padding: .55rem .65rem;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+}

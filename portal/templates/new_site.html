@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Nuevo sitio{% endblock %}
+{% block content %}
+<a href="{{ url_for('sites') }}">Volver a la lista de sitios</a>
+<h1>Nuevo sitio</h1>
+
+<form class="panel form-panel" method="post" action="{{ url_for('new_site') }}">
+    {% if error %}
+    <p class="notice error" role="alert">{{ error }}</p>
+    {% endif %}
+    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+    <div class="field">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" name="nombre" value="{{ valores.nombre }}" required
+               minlength="2" maxlength="20" pattern="{{ patron_nombre }}"
+               aria-describedby="nombre-ayuda">
+        <small id="nombre-ayuda">De 2 a 20 letras, números o guiones.</small>
+    </div>
+    <div class="field">
+        <label for="codigo">Código</label>
+        <input id="codigo" name="codigo" value="{{ valores.codigo }}"
+               required pattern="{{ patron_codigo }}" aria-describedby="codigo-ayuda">
+        <small id="codigo-ayuda">Código único de letras, números o guiones.</small>
+    </div>
+    <div class="field">
+        <label for="lan_if">Interfaz LAN</label>
+        <select id="lan_if" name="lan_if" required>
+            {% if valores.lan_if not in interfaces %}
+            <option value="" selected disabled>Selecciona una interfaz</option>
+            {% endif %}
+            {% for interfaz in interfaces %}
+            <option value="{{ interfaz }}"{% if interfaz == valores.lan_if %} selected{% endif %}>{{ interfaz }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="button">Reservar sitio</button>
+</form>
+{% endblock %}

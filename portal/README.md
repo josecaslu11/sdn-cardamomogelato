@@ -46,3 +46,23 @@ cuarentenas vencidas, que también se pueden procesar mediante
 `liberar_vencidos()`. Las asignaciones liberadas se conservan en el historial.
 
 Ejecuta `python -m pytest -q` para comprobar el IPAM y el login.
+
+## Formulario y listado de sitios
+
+Con las credenciales del Paso 1 en `.env`, inicia el portal desde `portal/`:
+
+```bash
+export PORTAL_DB_PATH="$(mktemp -d)/ipam.sqlite3"
+python seed.py
+python -m flask --app app run
+```
+
+Abre `http://127.0.0.1:5000/` e inicia sesión. El listado muestra cuatro
+sucursales activas y cuatro routers disponibles. En **Nuevo sitio**, registra
+`Escuintla` con código `ESCUINTLA` e interfaz `Ethernet0/1`. El listado muestra
+R7 en estado **Aprovisionando**. Registra otro sitio con un código distinto
+para comprobar que recibe R8. Si repites un código, el formulario muestra el
+error y conserva los datos ingresados.
+
+Las reservas de este paso se guardan localmente en SQLite. El contador de
+routers disponibles refleja los nodos disponibles registrados en la base.

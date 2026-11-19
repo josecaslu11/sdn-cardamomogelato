@@ -147,11 +147,13 @@ Al finalizar:
 ## Estado actual del proyecto
 
 - Entorno WSL2 configurado.
-- Ansible instalado.
-- Inventario y tareas de Ansible inspeccionados.
-- Paso 1: aplicación Flask con login completado.
+- Ansible instalado e inventarios inspeccionados.
 - Portal integrado al repositorio compartido.
-- Siguiente paso: implementación del IPAM y base de datos.
+- Desarrollo directamente en la rama main.
+- Paso 1: aplicación Flask con login completado.
+- Paso 2: IPAM, SQLite y pruebas automatizadas completado.
+- Paso actual: Paso 3, formulario de alta y listado de sitios.
+- Pendiente: integración real con Ansible.
 
 ## Documentación de referencia
 
