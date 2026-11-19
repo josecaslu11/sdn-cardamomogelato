@@ -28,9 +28,7 @@
         <h2>Qué se asignó</h2>
         {{ tabla(asignaciones) }}
     </section>
-    <aside class="panel site-actions">
-        <h2>Qué se hizo</h2>
-    </aside>
+    {% include "site_progress.html" %}
 </div>
 <section class="panel config-preview">
     <h2>Archivos para Ansible</h2>

@@ -121,3 +121,24 @@ se resuelven desde `portal/`.
 Los archivos se reemplazan atómicamente de forma individual. Si falla una
 escritura, se restauran los archivos publicados durante esa alta y se revierte
 la reserva. Day-0 queda pendiente de la plantilla oficial.
+
+## Seguimiento del aprovisionamiento
+
+Usa una base temporal y arranca el portal con `PORTAL_DRY_RUN=1` siguiendo
+los comandos del apartado anterior. Registra una sucursal y abre su ficha.
+En **Qué se hizo**, pulsa **Simular avance**. Cada pulsación completa una
+etapa. Con siete etapas verás **64 %** y con once, **100 %**. Recarga la ficha
+o reinicia Flask con la misma base temporal para comprobar la persistencia.
+
+En otra sucursal, pulsa **Simular fallo** durante el avance. La etapa en
+ejecución aparece como **Fallida** y las siguientes quedan pendientes.
+La simulación guarda su resultado en SQLite y el sitio conserva su estado
+y sus asignaciones IPAM.
+
+Con una sesión iniciada, puedes consultar `GET /sitios/<id>/progreso` para
+obtener las etapas, el porcentaje y las últimas líneas del seguimiento en
+JSON. Cuando exista una ejecución, también puedes consultarla con
+`GET /runs/<id>/progress`. `progress.py` define la función
+`aplicar_evento` para que un futuro proceso registre transiciones de etapas
+mediante identificador de ejecución y orden. La plantilla oficial Day-0
+sigue pendiente.

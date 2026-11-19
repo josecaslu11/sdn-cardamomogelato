@@ -260,3 +260,129 @@ def test_error_de_escritura_muestra_mensaje_y_permite_reintentar(autenticado, mo
     assert "La reserva no se completó" in response.get_data(as_text=True)
     assert reservar(autenticado).status_code == 303
     assert "inventory/host_vars/R7.yml" in autenticado.get("/sitios/5").get_data(as_text=True)
+
+
+@pytest.fixture
+def alta_en_progreso(autenticado):
+    assert reservar(autenticado).status_code == 303
+    return autenticado
+
+
+def simular_etapa(client, accion, sitio=5, *, con_token=True):
+    client.get(f"/sitios/{sitio}")
+    with client.session_transaction() as session:
+        csrf = session.get("csrf_token", "")
+    return client.post(f"/sitios/{sitio}/progreso/simular", data={
+        "accion": accion, "csrf_token": csrf if con_token else "",
+    })
+
+
+@pytest.mark.parametrize(("method", "path"), [
+    ("GET", "/sitios/5/progreso"),
+    ("GET", "/runs/1/progress"),
+    ("POST", "/sitios/5/progreso/simular"),
+])
+def test_endpoints_progreso_privados(client, method, path):
+    response = client.open(path, method=method)
+    assert response.status_code == 302
+    assert response.location == "/login"
+
+
+def test_progreso_inicial_y_etapas(alta_en_progreso):
+    response = alta_en_progreso.get("/sitios/5/progreso")
+    progreso = response.get_json()
+    assert progreso["id"] is None
+    assert (progreso["porcentaje"], progreso["hechos"], progreso["total"]) == (0, 0, 11)
+    assert [paso["quien"] for paso in progreso["pasos"][4:10]] == [
+        "ipsec", "dmvpn", "lan", "routing", "snmp", "zabbix",
+    ]
+    assert {paso["estado"] for paso in progreso["pasos"]} == {"pendiente"}
+    pagina = alta_en_progreso.get("/sitios/5").get_data(as_text=True)
+    assert "Simulación de aprovisionamiento" in pagina
+    assert "Simular avance" in pagina
+    assert "site_progress.js" in pagina
+
+
+def test_avance_persistente_y_fin_sin_cambiar_ipam(alta_en_progreso, ipam, tmp_path):
+    client = alta_en_progreso
+    for _ in range(7):
+        response = simular_etapa(client, "avanzar")
+        assert response.status_code == 200
+    progreso = response.get_json()
+    assert (progreso["estado"], progreso["porcentaje"], progreso["hechos"]) == ("en_curso", 64, 7)
+    assert progreso["pasos"][7]["estado"] == "en_curso"
+    assert progreso["pasos"][6]["segundos"] >= 0
+    assert progreso["simulado"] is True
+    assert len(progreso["salida"]) == 7
+
+    instance, config = ipam
+    reiniciado = create_app(
+        tmp_path / ".env", database=instance.database, config_file=config
+    ).test_client()
+    reiniciado.post("/login", data={"username": "prueba", "password": "contraseña"})
+    assert reiniciado.get("/sitios/5/progreso").get_json()["porcentaje"] == 64
+    assert "64 % · 7 de 11 etapas" in reiniciado.get("/sitios/5").get_data(as_text=True)
+    assert reiniciado.get(f'/runs/{progreso["id"]}/progress').get_json()["hechos"] == 7
+
+    for _ in range(4):
+        response = simular_etapa(reiniciado, "avanzar")
+        assert response.status_code == 200
+    final = response.get_json()
+    assert (final["estado"], final["porcentaje"], final["hechos"]) == ("ok", 100, 11)
+    assert simular_etapa(reiniciado, "avanzar").status_code == 409
+    with transaction(instance.database) as db:
+        assert db.execute("SELECT estado FROM sites WHERE id = 5").fetchone()[0] == "aprovisionando"
+        assert db.execute("SELECT estado FROM nodes WHERE router = 'R7'").fetchone()[0] == "aprovisionando"
+        assert db.execute("SELECT DISTINCT estado FROM allocations WHERE sitio_id = 5").fetchone()[0] == "reservado"
+
+
+def test_fallo_marca_etapa_actual_y_detiene_simulacion(alta_en_progreso):
+    client = alta_en_progreso
+    for _ in range(3):
+        assert simular_etapa(client, "avanzar").status_code == 200
+    response = simular_etapa(client, "fallar")
+    assert response.status_code == 200
+    progreso = response.get_json()
+    assert (progreso["estado"], progreso["hechos"], progreso["porcentaje"]) == ("error", 3, 27)
+    assert progreso["pasos"][3]["estado"] == "error"
+    assert "Comprobar que el router responde" in progreso["pasos"][3]["detalle"]
+    assert progreso["pasos"][4]["estado"] == "pendiente"
+    assert progreso["salida"][-1].startswith("Simulación")
+    assert "Fallida" in client.get("/sitios/5").get_data(as_text=True)
+    assert simular_etapa(client, "avanzar").status_code == 409
+
+
+def test_progreso_valida_dry_run_csrf_y_sitios(alta_en_progreso, ipam, tmp_path, monkeypatch):
+    client = alta_en_progreso
+    assert client.get("/sitios/999/progreso").status_code == 404
+    assert client.get("/runs/999/progress").status_code == 404
+    assert simular_etapa(client, "otra").status_code == 400
+    assert simular_etapa(client, "fallar", con_token=False).status_code == 403
+    assert simular_etapa(client, "avanzar", sitio=1).status_code == 409
+    assert simular_etapa(client, "avanzar", sitio=999).status_code == 404
+    assert client.get("/sitios/5/progreso").get_json()["id"] is None
+
+    monkeypatch.setenv("PORTAL_DRY_RUN", "0")
+    instance, config = ipam
+    real_mode = create_app(tmp_path / ".env", database=instance.database, config_file=config).test_client()
+    real_mode.post("/login", data={"username": "prueba", "password": "contraseña"})
+    assert "Simular avance" not in real_mode.get("/sitios/5").get_data(as_text=True)
+    assert simular_etapa(real_mode, "avanzar").status_code == 403
+
+
+def test_eventos_de_una_ejecucion_no_simulada(alta_en_progreso, ipam):
+    from progress import ProgresoNoDisponible, aplicar_evento, crear_alta
+
+    instance, _ = ipam
+    fecha = "2026-01-01T00:00:00+00:00"
+    with transaction(instance.database) as db:
+        run_id = crear_alta(db, 5, simulado=False, fecha=fecha)
+        with pytest.raises(ProgresoNoDisponible):
+            aplicar_evento(db, run_id, 2, "en_curso", fecha=fecha)
+        aplicar_evento(db, run_id, 1, "en_curso", fecha=fecha)
+        aplicar_evento(db, run_id, 1, "ok", fecha=fecha)
+
+    progreso = alta_en_progreso.get(f"/runs/{run_id}/progress").get_json()
+    assert progreso["simulado"] is False
+    assert (progreso["hechos"], progreso["porcentaje"]) == (1, 9)
+    assert simular_etapa(alta_en_progreso, "avanzar").status_code == 409

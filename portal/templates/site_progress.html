@@ -1,0 +1,33 @@
+{% set etiquetas = {'pendiente': 'Pendiente', 'en_curso': 'En ejecución',
+                    'ok': 'Completada', 'error': 'Fallida'} %}
+<section class="panel site-actions" id="site-progress"
+         data-url="{{ url_for('site_progress', sitio_id=sitio.id) }}"
+         data-state="{{ progreso.estado }}"
+         data-labels='{{ etiquetas | tojson }}'>
+    <h2>Qué se hizo</h2>
+    <p id="simulation-notice"{% if not (progreso.simulado or permitir_simular) %} hidden{% endif %}>
+        Simulación de aprovisionamiento
+    </p>
+    <label for="progress-bar">Progreso del alta</label>
+    <progress id="progress-bar" max="100" value="{{ progreso.porcentaje }}"></progress>
+    <p id="progress-summary" role="status">{{ progreso.porcentaje }} % · {{ progreso.hechos }} de {{ progreso.total }} etapas</p>
+    <ol class="progress-steps">
+        {% for paso in progreso.pasos %}
+        <li data-step="{{ paso.orden }}" data-state="{{ paso.estado }}">
+            <span class="step-name">{{ paso.nombre }}</span>
+            <span class="step-state"><span class="step-icon" aria-hidden="true"></span><span data-label>{{ etiquetas[paso.estado] }}</span></span>
+            <small data-failure{% if paso.estado != 'error' or not paso.detalle %} hidden{% endif %}>{{ paso.detalle if paso.estado == 'error' else '' }}</small>
+        </li>
+        {% endfor %}
+    </ol>
+    {% if permitir_simular %}
+    <form id="simulate-progress" action="{{ url_for('simulate_progress', sitio_id=sitio.id) }}"
+          method="post"{% if progreso.estado in ('ok', 'error') %} hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <button class="button" name="accion" value="avanzar">Simular avance</button>
+        <button class="button simulate-failure" name="accion" value="fallar">Simular fallo</button>
+    </form>
+    {% endif %}
+    <p id="progress-error" role="alert" hidden></p>
+</section>
+<script defer src="{{ url_for('static', filename='site_progress.js') }}"></script>

@@ -150,11 +150,13 @@ Al finalizar:
 - Ansible instalado e inventarios inspeccionados.
 - Portal integrado al repositorio compartido.
 - Desarrollo directamente en la rama main.
-- Paso 1: aplicación Flask con login completado.
+- Paso 1: Flask y login completado.
 - Paso 2: IPAM y SQLite completado.
 - Paso 3: formulario y listado de sitios completado.
-- Paso 4: detalle de sitios y asignaciones IPAM completado.
-- Paso actual: Paso 5, generación de archivos para Ansible.
+- Paso 4: detalle de sitios y asignaciones completado.
+- Paso 5: generación de archivos YAML implementada.
+- Pendiente: plantilla oficial Day-0.
+- Paso actual: Paso 6, barra de progreso.
 - Pendiente: integración real con Ansible.
 
 ## Documentación de referencia

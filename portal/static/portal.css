@@ -100,7 +100,7 @@ tbody tr + tr { border-top: 1px solid var(--line); }
 }
 .site-detail h2 { margin-top: 0; }
 @media (min-width: 60rem) {
-    .site-detail { grid-template-columns: minmax(0, 1fr) 12rem; }
+    .site-detail { grid-template-columns: minmax(0, 1fr) minmax(17rem, 23rem); }
 }
 .filters {
     display: flex;
@@ -122,3 +122,29 @@ tbody tr + tr { border-top: 1px solid var(--line); }
     border-radius: .45rem;
     background: #e9f1ed;
 }
+
+#progress-bar {
+    width: 100%;
+    height: 1rem;
+    accent-color: #2368a4;
+}
+[data-state="ok"] > #progress-bar { accent-color: #237149; }
+[data-state="error"] > #progress-bar { accent-color: #a23335; }
+#progress-summary { margin: .25rem 0 .8rem; font-variant-numeric: tabular-nums; }
+#simulation-notice { color: #674400; font-weight: 650; }
+.progress-steps { padding-inline-start: 1.65rem; }
+.progress-steps li { padding-block: .4rem; }
+.progress-steps li + li { border-top: 1px solid var(--line); }
+.step-name, .step-state { display: block; }
+.step-state { font-size: .875rem; }
+.step-icon { display: inline-block; width: 1.25em; }
+[data-state="pendiente"] > .step-state .step-icon::before { content: "○"; }
+[data-state="en_curso"] > .step-state { color: #164475; }
+[data-state="en_curso"] > .step-state .step-icon::before { content: "▶"; }
+[data-state="ok"] > .step-state { color: #164c31; }
+[data-state="ok"] > .step-state .step-icon::before { content: "✔"; }
+[data-state="error"] > .step-state, #progress-error { color: #812325; }
+[data-state="error"] > .step-state .step-icon::before { content: "✖"; }
+#simulate-progress:not([hidden]) { display: flex; flex-wrap: wrap; gap: .5rem; }
+.simulate-failure { background: #812325; }
+.simulate-failure:hover { background: #651a1c; }

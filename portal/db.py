@@ -52,6 +52,41 @@ CREATE TABLE IF NOT EXISTS audit_log (
     codigo_salida INTEGER,
     resumen TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY,
+    site_id INTEGER NOT NULL REFERENCES sites(id),
+    tipo TEXT NOT NULL CHECK (tipo IN ('alta', 'baja')),
+    simulado INTEGER NOT NULL CHECK (simulado IN (0, 1)),
+    estado TEXT NOT NULL CHECK (estado IN ('en_curso', 'ok', 'error')),
+    inicio TEXT NOT NULL,
+    fin TEXT,
+    codigo_salida INTEGER,
+    ok_count INTEGER,
+    changed_count INTEGER,
+    failed_count INTEGER
+);
+CREATE INDEX IF NOT EXISTS runs_por_sitio ON runs(site_id, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS runs_simulado_alta ON runs(site_id)
+    WHERE tipo = 'alta' AND simulado = 1;
+CREATE TABLE IF NOT EXISTS run_steps (
+    id INTEGER PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES runs(id),
+    orden INTEGER NOT NULL,
+    nombre TEXT NOT NULL,
+    quien TEXT NOT NULL,
+    estado TEXT NOT NULL CHECK (estado IN ('pendiente', 'en_curso', 'ok', 'error')),
+    inicio TEXT,
+    fin TEXT,
+    detalle TEXT,
+    UNIQUE (run_id, orden)
+);
+CREATE TABLE IF NOT EXISTS run_log (
+    id INTEGER PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES runs(id),
+    numero_linea INTEGER NOT NULL,
+    texto TEXT NOT NULL,
+    UNIQUE (run_id, numero_linea)
+);
 """
 
 

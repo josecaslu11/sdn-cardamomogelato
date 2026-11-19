@@ -6,11 +6,12 @@ from secrets import token_hex
 import sqlite3
 
 from dotenv import dotenv_values
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
 from ansible_files import AnsibleFiles, InventoryError, dynamic_inventory, host_vars
 from db import detalle_sitio, initialize, listado_ipam, resumen_sitios, vista_inventario
 from ipam import IPAM, SITE_CODE, SITE_NAME
+from progress import ProgresoNoDisponible, consultar_progreso, simular
 
 
 LAN_INTERFACES = ("Ethernet0/1", "Ethernet0/2")
@@ -66,14 +67,59 @@ def create_app(env_file=None, *, database=None, config_file=None):
         sitio, asignaciones = detalle
         registrados = vista_inventario(ipam.database)
         publicado = next((row for row in registrados if row["id"] == sitio_id), None)
+        progreso = consultar_progreso(ipam.database, sitio_id=sitio_id)
+        permitir_simular = (
+            files.dry_run and publicado is not None and sitio["estado"] == "aprovisionando"
+            and (progreso["id"] is None or progreso["simulado"])
+        )
+        if permitir_simular and "csrf_token" not in session:
+            session["csrf_token"] = token_hex(32)
         return render_template(
             "site_detail.html",
+            progreso=progreso,
+            permitir_simular=permitir_simular,
             sitio=sitio,
             asignaciones=asignaciones,
             inventario_yaml=dynamic_inventory(registrados),
             host_vars_yaml=host_vars(publicado) if publicado is not None else None,
             dry_run=files.dry_run,
         )
+
+    @app.get("/sitios/<int:sitio_id>/progreso")
+    @login_required
+    def site_progress(sitio_id):
+        progreso = consultar_progreso(ipam.database, sitio_id=sitio_id) if 0 < sitio_id < 2**63 else None
+        if progreso is None:
+            return jsonify(error="El sitio solicitado no existe."), 404
+        return jsonify(progreso)
+
+    @app.get("/runs/<int:run_id>/progress")
+    @login_required
+    def run_progress(run_id):
+        progreso = consultar_progreso(ipam.database, run_id=run_id) if 0 < run_id < 2**63 else None
+        if progreso is None:
+            return jsonify(error="La ejecución solicitada no existe."), 404
+        return jsonify(progreso)
+
+    @app.post("/sitios/<int:sitio_id>/progreso/simular")
+    @login_required
+    def simulate_progress(sitio_id):
+        if not files.dry_run:
+            return jsonify(error="La simulación solo está disponible en modo de desarrollo."), 403
+        csrf = session.get("csrf_token")
+        if csrf is None or not compare_digest(request.form.get("csrf_token", "").encode(), csrf.encode()):
+            return jsonify(error="La solicitud no es válida. Recarga la página."), 403
+        if not 0 < sitio_id < 2**63:
+            return jsonify(error="El sitio solicitado no existe."), 404
+        try:
+            progreso = simular(ipam.database, sitio_id, request.form.get("accion"))
+        except ProgresoNoDisponible as exc:
+            return jsonify(error=str(exc)), 409
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        if progreso is None:
+            return jsonify(error="El sitio solicitado no existe."), 404
+        return jsonify(progreso)
 
     @app.get("/ipam")
     @login_required
