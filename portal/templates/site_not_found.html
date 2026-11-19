@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Sitio no encontrado{% endblock %}
+{% block content %}
+<h1>Sitio no encontrado</h1>
+<p>El sitio solicitado no existe.</p>
+<a href="{{ url_for('sites') }}">Volver a la lista de sitios</a>
+{% endblock %}

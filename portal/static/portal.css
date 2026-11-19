@@ -74,3 +74,40 @@ tbody tr + tr { border-top: 1px solid var(--line); }
     color: inherit;
     font: inherit;
 }
+
+.portal-nav {
+    display: flex;
+    gap: 1rem;
+    margin-inline-start: auto;
+}
+.portal-nav a { color: inherit; }
+.status-reservado { background: #dcecff; color: #164475; }
+.status-en_uso { background: #d8f2e3; color: #164c31; }
+.status-cuarentena { background: #fff0ce; color: #674400; }
+.status-liberado { background: #e9ebed; color: #424852; }
+.site-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: .75rem;
+}
+.site-facts dt { font-weight: 650; }
+.site-facts dd { margin: 0; overflow-wrap: anywhere; }
+.site-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+.site-detail h2 { margin-top: 0; }
+@media (min-width: 60rem) {
+    .site-detail { grid-template-columns: minmax(0, 1fr) 12rem; }
+}
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
+.filters .field { flex: 1 1 10rem; margin-bottom: 0; }
+.filters > a { align-self: center; }

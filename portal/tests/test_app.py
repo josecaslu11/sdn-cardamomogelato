@@ -142,3 +142,94 @@ def test_pool_agotado(autenticado):
     response = reservar(autenticado)
     assert response.status_code == 400
     assert "No hay routers disponibles." in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize("path", ["/sitios/1", "/sitios/999", "/ipam"])
+def test_consultas_ipam_protegidas(client, path):
+    response = client.get(path)
+    assert response.status_code == 302
+    assert response.location == "/login"
+
+
+@pytest.mark.parametrize("sitio_id", [0, 999, 2**63])
+def test_detalle_inexistente(autenticado, sitio_id):
+    response = autenticado.get(f"/sitios/{sitio_id}")
+    assert response.status_code == 404
+    assert "El sitio solicitado no existe." in response.get_data(as_text=True)
+
+
+def test_detalle_desde_listado_con_datos_guardados(autenticado, ipam):
+    pagina = autenticado.get("/").get_data(as_text=True)
+    assert '<a href="/sitios/1">Mazate</a>' in pagina
+    instancia, _ = ipam
+    with transaction(instancia.database) as db:
+        db.execute(
+            "UPDATE allocations SET valor = ? WHERE sitio_id = 1 AND recurso = 'lan_v4'",
+            ("10.99.0.0/24",),
+        )
+        asignaciones = db.execute(
+            "SELECT valor, fecha_cambio FROM allocations WHERE sitio_id = 1"
+        ).fetchall()
+    response = autenticado.get("/sitios/1")
+    assert response.status_code == 200
+    detalle = response.get_data(as_text=True)
+    for dato in ("Mazate", "Código", "R3", "Ethernet0/2", "Creado", "Activo"):
+        assert dato in detalle
+    assert detalle.count('class="status status-en_uso"') == len(asignaciones)
+    for valor, fecha in asignaciones:
+        assert f"<code>{valor}</code>" in detalle
+        assert f'datetime="{fecha}"' in detalle
+    assert "10.14.0.0/24" not in detalle
+
+
+def test_ipam_y_filtros(autenticado):
+    assert reservar(autenticado).status_code == 303
+    sin_filtros = autenticado.get("/ipam").get_data(as_text=True)
+    assert "2001:1111:7::/64" in sin_filtros
+    assert "2001:1111:3::/64" in sin_filtros
+
+    filtros = {"router": "R7", "recurso": "lan_v6", "estado": "reservado"}
+    pagina = autenticado.get("/ipam", query_string=filtros).get_data(as_text=True)
+    for valor in filtros.values():
+        assert f'value="{valor}" selected' in pagina
+    assert pagina.count("<code>") == 1
+    assert "<code>2001:1111:7::/64</code>" in pagina
+    assert "status-reservado" in pagina
+    for campo, valor in filtros.items():
+        pagina = autenticado.get("/ipam", query_string={campo: valor}).get_data(as_text=True)
+        assert "<code>2001:1111:7::/64</code>" in pagina
+        assert pagina.count("<code>") < sin_filtros.count("<code>")
+
+    vacia = autenticado.get("/ipam", query_string={"router": "R7", "estado": "en_uso"})
+    assert vacia.status_code == 200
+    assert "No se encontraron asignaciones." in vacia.get_data(as_text=True)
+
+
+def test_detalle_e_ipam_preservan_historial_del_router(autenticado, ipam):
+    from datetime import datetime, timedelta, timezone
+
+    instancia, _ = ipam
+    inicio = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    instancia.clock = lambda: inicio
+    viejo = instancia.reservar_sitio("Anterior", "ANT")
+    instancia.finalizar_alta(7, 0)
+    instancia.retirar_sitio(7)
+    instancia.finalizar_baja(7, 0)
+    detalle = autenticado.get(f"/sitios/{viejo['id']}").get_data(as_text=True)
+    assert "Cuarentena hasta" in detalle
+    assert "status-cuarentena" in detalle
+
+    instancia.clock = lambda: inicio + timedelta(days=7)
+    nuevo = instancia.reservar_sitio("Actual", "ACT")
+    assert viejo["router"] == nuevo["router"] == "R7"
+    detalle = autenticado.get(f"/sitios/{viejo['id']}").get_data(as_text=True)
+    assert "Anterior" in detalle
+    assert "status-liberado" in detalle
+    detalle = autenticado.get(f"/sitios/{nuevo['id']}").get_data(as_text=True)
+    assert "Actual" in detalle
+    assert "status-reservado" in detalle
+
+    pagina = autenticado.get("/ipam?router=R7&recurso=lan_v4").get_data(as_text=True)
+    assert pagina.count("<code>10.18.0.0/24</code>") == 2
+    assert "status-reservado" in pagina
+    assert "status-liberado" in pagina

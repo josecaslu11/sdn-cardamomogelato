@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "assignments.html" import tabla %}
+{% block title %}{{ sitio.site_name }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('sites') }}">Volver a la lista de sitios</a>
+<div class="page-heading">
+    <h1>{{ sitio.site_name }}</h1>
+    <span class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}</span>
+</div>
+<dl class="panel site-facts">
+    <div><dt>Router</dt><dd>{{ sitio.router }}</dd></div>
+    <div><dt>N.º de sitio</dt><dd>{{ sitio.site_id }}</dd></div>
+    {% if sitio.codigo %}
+    <div><dt>Código</dt><dd>{{ sitio.codigo }}</dd></div>
+    {% endif %}
+    <div><dt>Interfaz LAN</dt><dd>{{ sitio.lan_if }}</dd></div>
+    {% for campo, etiqueta in (
+        ('creado_en', 'Creado'),
+        ('retirado_en', 'Retirado'),
+        ('cuarentena_hasta', 'Cuarentena hasta'),
+        ('liberado_en', 'Liberado')
+    ) if sitio[campo] %}
+    <div><dt>{{ etiqueta }}</dt><dd><time datetime="{{ sitio[campo] }}">{{ sitio[campo] }}</time></dd></div>
+    {% endfor %}
+</dl>
+<div class="site-detail">
+    <section>
+        <h2>Qué se asignó</h2>
+        {{ tabla(asignaciones) }}
+    </section>
+    <aside class="panel site-actions">
+        <h2>Qué se hizo</h2>
+    </aside>
+</div>
+{% endblock %}

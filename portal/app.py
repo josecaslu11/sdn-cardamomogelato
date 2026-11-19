@@ -7,7 +7,7 @@ from secrets import token_hex
 from dotenv import dotenv_values
 from flask import Flask, flash, redirect, render_template, request, session, url_for
 
-from db import initialize, resumen_sitios
+from db import detalle_sitio, initialize, listado_ipam, resumen_sitios
 from ipam import IPAM, SITE_CODE, SITE_NAME
 
 
@@ -50,6 +50,25 @@ def create_app(env_file=None, *, database=None, config_file=None):
     def sites():
         sitios, indicadores = resumen_sitios(ipam.database)
         return render_template("sites.html", sitios=sitios, indicadores=indicadores)
+
+    @app.get("/sitios/<int:sitio_id>")
+    @login_required
+    def site_detail(sitio_id):
+        # Los identificadores de SQLite son enteros de 64 bits con signo.
+        detalle = detalle_sitio(ipam.database, sitio_id) if 0 < sitio_id < 2**63 else None
+        if detalle is None:
+            return render_template("site_not_found.html"), 404
+        sitio, asignaciones = detalle
+        return render_template("site_detail.html", sitio=sitio, asignaciones=asignaciones)
+
+    @app.get("/ipam")
+    @login_required
+    def ipam_list():
+        filtros = {campo: request.args.get(campo, "") for campo in ("router", "recurso", "estado")}
+        asignaciones, opciones = listado_ipam(ipam.database, **filtros)
+        return render_template(
+            "ipam.html", asignaciones=asignaciones, filtros=filtros, opciones=opciones
+        )
 
     @app.route("/sitios/nuevo", methods=["GET", "POST"])
     @login_required

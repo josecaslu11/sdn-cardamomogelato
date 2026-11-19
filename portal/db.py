@@ -78,7 +78,7 @@ def resumen_sitios(database):
         db.row_factory = sqlite3.Row
         db.execute("BEGIN")
         sitios = db.execute(
-            """SELECT s.site_name, s.router, s.site_id, s.estado,
+            """SELECT s.id, s.site_name, s.router, s.site_id, s.estado,
                       v4.valor AS lan_v4, v6.valor AS lan_v6
                FROM sites AS s
                LEFT JOIN allocations AS v4 ON v4.sitio_id = s.id AND v4.recurso = 'lan_v4'
@@ -94,3 +94,49 @@ def resumen_sitios(database):
                        AS aprovisionando"""
         ).fetchone()
     return sitios, indicadores
+
+
+def detalle_sitio(database, sitio_id):
+    with closing(sqlite3.connect(database)) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN")
+        sitio = db.execute("SELECT * FROM sites WHERE id = ?", (sitio_id,)).fetchone()
+        if sitio is None:
+            return None
+        asignaciones = db.execute(
+            """SELECT recurso, valor, estado, fecha_cambio
+               FROM allocations WHERE sitio_id = ? ORDER BY id""",
+            (sitio_id,),
+        ).fetchall()
+    return sitio, asignaciones
+
+
+def listado_ipam(database, *, router="", recurso="", estado=""):
+    with closing(sqlite3.connect(database)) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("BEGIN")
+        opciones = {
+            "router": db.execute(
+                """SELECT s.router AS valor FROM sites s
+                   WHERE EXISTS (SELECT 1 FROM allocations a WHERE a.sitio_id = s.id)
+                   GROUP BY s.router ORDER BY MIN(s.site_id)"""
+            ).fetchall(),
+            "recurso": db.execute(
+                "SELECT DISTINCT recurso AS valor FROM allocations ORDER BY recurso"
+            ).fetchall(),
+            "estado": db.execute(
+                "SELECT DISTINCT estado AS valor FROM allocations ORDER BY estado"
+            ).fetchall(),
+        }
+        asignaciones = db.execute(
+            """SELECT s.id AS sitio_id, s.site_name, s.router,
+                      a.recurso, a.valor, a.estado, a.fecha_cambio
+               FROM allocations a
+               JOIN sites s ON s.id = a.sitio_id
+               WHERE (:router = '' OR s.router = :router)
+                 AND (:recurso = '' OR a.recurso = :recurso)
+                 AND (:estado = '' OR a.estado = :estado)
+               ORDER BY s.site_id, s.id DESC, a.id""",
+            {"router": router, "recurso": recurso, "estado": estado},
+        ).fetchall()
+    return asignaciones, opciones

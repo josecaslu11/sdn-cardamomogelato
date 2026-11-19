@@ -151,8 +151,9 @@ Al finalizar:
 - Portal integrado al repositorio compartido.
 - Desarrollo directamente en la rama main.
 - Paso 1: aplicación Flask con login completado.
-- Paso 2: IPAM, SQLite y pruebas automatizadas completado.
-- Paso actual: Paso 3, formulario de alta y listado de sitios.
+- Paso 2: IPAM y SQLite completado.
+- Paso 3: formulario y listado de sitios completado.
+- Paso actual: Paso 4, detalle de sitios y asignaciones IPAM.
 - Pendiente: integración real con Ansible.
 
 ## Documentación de referencia

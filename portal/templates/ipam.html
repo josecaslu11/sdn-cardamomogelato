@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "assignments.html" import recursos, tabla %}
+{% block title %}Asignaciones IPAM{% endblock %}
+{% block content %}
+<h1>Asignaciones IPAM</h1>
+<form class="panel filters" method="get" action="{{ url_for('ipam_list') }}">
+    {% for campo, etiqueta in [('router', 'Router'), ('recurso', 'Tipo de recurso'), ('estado', 'Estado')] %}
+    <div class="field">
+        <label for="{{ campo }}">{{ etiqueta }}</label>
+        <select id="{{ campo }}" name="{{ campo }}">
+            <option value="">Todos</option>
+            {% if filtros[campo] and filtros[campo] not in opciones[campo] | map(attribute='valor') | list %}
+            <option value="{{ filtros[campo] }}" selected>Sin coincidencias</option>
+            {% endif %}
+            {% for opcion in opciones[campo] %}
+            <option value="{{ opcion.valor }}"{% if opcion.valor == filtros[campo] %} selected{% endif %}>
+                {% if campo == 'recurso' %}
+                {{ recursos.get(opcion.valor, opcion.valor) }}
+                {% elif campo == 'estado' %}
+                {{ opcion.valor | replace('_', ' ') | capitalize }}
+                {% else %}
+                {{ opcion.valor }}
+                {% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endfor %}
+    <button class="button" type="submit">Filtrar</button>
+    {% if filtros.values() | select | list %}
+    <a href="{{ url_for('ipam_list') }}">Limpiar filtros</a>
+    {% endif %}
+</form>
+{{ tabla(asignaciones, mostrar_sitio=true) }}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% set recursos = {
+    'underlay': 'IP underlay',
+    'loopback': 'Loopback',
+    'lan_v4': 'LAN IPv4',
+    'lan_v6': 'LAN IPv6',
+    'gateway_v4': 'Gateway IPv4',
+    'gateway_v6': 'Gateway IPv6',
+    'tunnel0_v4': 'Tunnel0 IPv4',
+    'tunnel0_v6': 'Tunnel0 IPv6',
+    'tunnel1_v4': 'Tunnel1 IPv4',
+    'tunnel1_v6': 'Tunnel1 IPv6',
+    'link_local': 'Link-local'
+} %}
+
+{% macro tabla(asignaciones, mostrar_sitio=false) %}
+{% if asignaciones %}
+<div class="table-wrap" role="region" aria-label="Asignaciones IPAM" tabindex="0">
+    <table>
+        <thead>
+            <tr>
+                {% if mostrar_sitio %}
+                <th scope="col">Router</th>
+                <th scope="col">Sucursal</th>
+                {% endif %}
+                <th scope="col">Recurso</th>
+                <th scope="col">Valor</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Último cambio</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asignacion in asignaciones %}
+            {{ fila(asignacion, recursos.get(asignacion.recurso, asignacion.recurso), mostrar_sitio) }}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="panel">No se encontraron asignaciones.</p>
+{% endif %}
+{% endmacro %}
+
+{% macro fila(asignacion, etiqueta, mostrar_sitio) %}
+<tr>
+    {% if mostrar_sitio %}
+    <td>{{ asignacion.router }}</td>
+    <td><a href="{{ url_for('site_detail', sitio_id=asignacion.sitio_id) }}">{{ asignacion.site_name }}</a></td>
+    {% endif %}
+    <th scope="row">{{ etiqueta }}</th>
+    <td><code>{{ asignacion.valor }}</code></td>
+    <td><span class="status status-{{ asignacion.estado }}">{{ asignacion.estado | replace('_', ' ') | capitalize }}</span></td>
+    <td><time datetime="{{ asignacion.fecha_cambio }}">{{ asignacion.fecha_cambio }}</time></td>
+</tr>
+{% endmacro %}

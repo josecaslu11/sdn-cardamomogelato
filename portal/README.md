@@ -66,3 +66,16 @@ error y conserva los datos ingresados.
 
 Las reservas de este paso se guardan localmente en SQLite. El contador de
 routers disponibles refleja los nodos disponibles registrados en la base.
+
+## Detalle de sitios y consultas IPAM
+
+Con la base temporal y el portal iniciados como en el apartado anterior,
+abre **Sitios** y haz clic en **Mazate**. Verás la ficha de R3 y sus
+asignaciones en estado **En uso**. Si registras **Escuintla**, su ficha
+mostrará las asignaciones de R7 en estado **Reservado**.
+
+Abre **IPAM** desde la navegación. Elige **R7**, **LAN IPv6** y **Reservado**
+para ver `2001:1111:7::/64`. **Limpiar filtros** vuelve a mostrar todas las
+asignaciones. Si se reutiliza un router después de la cuarentena, las
+asignaciones históricas siguen visibles con estado **Liberado** y su
+enlace abre la ficha original.

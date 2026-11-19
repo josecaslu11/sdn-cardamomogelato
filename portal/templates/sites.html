@@ -32,7 +32,7 @@
         <tbody>
             {% for sitio in sitios %}
             <tr>
-                <th scope="row">{{ sitio.site_name }}</th>
+                <th scope="row"><a href="{{ url_for('site_detail', sitio_id=sitio.id) }}">{{ sitio.site_name }}</a></th>
                 <td>{{ sitio.router }}</td>
                 <td>{{ sitio.site_id }}</td>
                 <td><code>{{ sitio.lan_v4 or '—' }}</code></td>
