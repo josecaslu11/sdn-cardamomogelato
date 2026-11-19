@@ -4,3 +4,5 @@ backup/
 inventory/group_vars/all/vault.yml
 _pycache_/
 *.pyc
+inventory/host_vars/R[7-9].yml
+inventory/host_vars/R10.yml
