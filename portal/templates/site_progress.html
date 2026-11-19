@@ -6,10 +6,10 @@
          data-automatic="{{ progreso.automatico | tojson }}"
          data-labels='{{ etiquetas | tojson }}'>
     <h2>Qué se hizo</h2>
-    <p id="simulation-notice"{% if not (progreso.simulado or permitir_simular or (dry_run and permitir_aprovisionar)) %} hidden{% endif %}>
+    <p id="simulation-notice"{% if not (progreso.simulado or permitir_simular or (dry_run and (permitir_aprovisionar or permitir_baja))) %} hidden{% endif %}>
         Simulación de aprovisionamiento
     </p>
-    <label for="progress-bar">Progreso del alta</label>
+    <label id="progress-label" for="progress-bar">Progreso de {{ progreso.tipo }}</label>
     <progress id="progress-bar" max="100" value="{{ progreso.porcentaje }}"></progress>
     <p id="progress-summary" role="status">{{ progreso.porcentaje }} % · {{ progreso.hechos }} de {{ progreso.total }} etapas</p>
     <ol class="progress-steps">
@@ -43,9 +43,31 @@
             </select>
         </div>
         {% endif %}
-        <button class="button" type="submit">Aprovisionar</button>
+        <button class="button" type="submit">{{ 'Reintentar alta' if sitio.estado == 'fallido' else 'Aprovisionar' }}</button>
     </form>
     {% endif %}
+    {% if permitir_baja %}
+    <form id="retire-site" action="{{ url_for('retire_site', sitio_id=sitio.id) }}" method="post"
+          {% if progreso.automatico and progreso.estado == 'en_curso' %}hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <div class="field">
+            <label for="retire-confirm">Para confirmar la baja, escribe {{ sitio.codigo }}</label>
+            <input type="text" id="retire-confirm" name="confirmacion" required>
+        </div>
+        {% if dry_run %}
+        <div class="field">
+            <label for="retire-result">Resultado simulado</label>
+            <select id="retire-result" name="resultado">
+                <option value="exito">Éxito</option>
+                <option value="fallo">Tarea fallida</option>
+                <option value="inalcanzable">Router inalcanzable</option>
+            </select>
+        </div>
+        {% endif %}
+        <button class="button simulate-failure" type="submit">{{ 'Reintentar baja' if sitio.estado == 'fallido' else 'Dar de baja' }}</button>
+    </form>
+    {% endif %}
+    <p id="quarantine-link" hidden><a href="{{ url_for('site_detail', sitio_id=sitio.id) }}">Ver cuarentena y asignaciones actualizadas</a></p>
     {% set conteos = progreso.resumen %}
     <p id="ansible-recap"{% if not conteos or conteos.ok_count is none %} hidden{% endif %}>{% if conteos %}Correctas: {{ conteos.ok_count }} · Cambios: {{ conteos.changed_count }} · Fallidas: {{ conteos.failed_count }}{% endif %}</p>
     <p id="run-result" role="status">{{ progreso.salida[-1] if progreso.automatico and progreso.salida else '' }}</p>

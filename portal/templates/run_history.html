@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Ejecución {{ progreso.id }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('site_history', sitio_id=progreso.sitio_id) }}">Volver al historial</a>
+<h1>{{ progreso.tipo | capitalize }} · Ejecución {{ progreso.id }}</h1>
+<p>{{ 'Simulada' if progreso.simulado else 'Real' }} · {{ progreso.porcentaje }} % · {{ progreso.hechos }} de {{ progreso.total }} etapas</p>
+{% set etiquetas = {'pendiente': 'Pendiente', 'en_curso': 'En ejecución', 'ok': 'Completada', 'error': 'Fallida'} %}
+<ol class="panel progress-steps">
+    {% for paso in progreso.pasos %}
+    <li>{{ paso.nombre }} · {{ etiquetas[paso.estado] }}{% if paso.segundos is not none %} · {{ paso.segundos }} s{% endif %}</li>
+    {% endfor %}
+</ol>
+<h2>Salida resumida</h2>
+{% if progreso.salida %}<ul>{% for linea in progreso.salida %}<li>{{ linea }}</li>{% endfor %}</ul>
+{% else %}<p>Esta ejecución todavía no tiene un resumen.</p>{% endif %}
+{% endblock %}

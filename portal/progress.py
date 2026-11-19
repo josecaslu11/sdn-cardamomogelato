@@ -21,6 +21,22 @@ ETAPAS_ALTA = (
 )
 
 
+ETAPAS_BAJA = (
+    ("Confirmar la baja", "portal"),
+    ("Consultar el estado del router", "decommission"),
+    ("Quitar túneles y OSPF", "decommission"),
+    ("Limpiar la interfaz LAN", "decommission"),
+    ("Quitar IPsec", "decommission"),
+    ("Limpiar los hubs y apagar la LAN", "decommission"),
+    ("Quitar SNMP", "decommission"),
+    ("Quitar el host de Zabbix", "decommission"),
+    ("Pasar direcciones a cuarentena", "portal"),
+    ("Actualizar el inventario", "portal"),
+)
+
+ETAPAS = {"alta": ETAPAS_ALTA, "baja": ETAPAS_BAJA}
+
+
 class ProgresoNoDisponible(ValueError):
     pass
 
@@ -38,15 +54,19 @@ def pasos_pendientes():
 
 
 def crear_alta(db, sitio_id, *, simulado, fecha):
+    return crear_run(db, sitio_id, tipo="alta", simulado=simulado, fecha=fecha)
+
+
+def crear_run(db, sitio_id, *, tipo, simulado, fecha):
     run_id = db.execute(
         """INSERT INTO runs (site_id, tipo, simulado, estado, inicio)
-           VALUES (?, 'alta', ?, 'en_curso', ?)""",
-        (sitio_id, simulado, fecha),
+           VALUES (?, ?, ?, 'en_curso', ?)""",
+        (sitio_id, tipo, simulado, fecha),
     ).lastrowid
     db.executemany(
         """INSERT INTO run_steps (run_id, orden, nombre, quien, estado)
            VALUES (?, ?, ?, ?, 'pendiente')""",
-        ((run_id, orden, nombre, quien) for orden, (nombre, quien) in enumerate(ETAPAS_ALTA, 1)),
+        ((run_id, orden, nombre, quien) for orden, (nombre, quien) in enumerate(ETAPAS[tipo], 1)),
     )
     return run_id
 
@@ -82,7 +102,7 @@ def aplicar_evento(db, run_id, orden, estado, *, fecha, detalle=None):
 
 def _snapshot(db, run):
     if run is None:
-        return {"id": None, "estado": "pendiente", "simulado": False, "automatico": False, "porcentaje": 0,
+        return {"id": None, "tipo": "alta", "estado": "pendiente", "simulado": False, "automatico": False, "porcentaje": 0,
                 "hechos": 0, "total": len(ETAPAS_ALTA), "pasos": pasos_pendientes(), "salida": []}
     pasos = []
     ahora = ahora_utc()
@@ -100,20 +120,25 @@ def _snapshot(db, run):
         "SELECT texto FROM run_log WHERE run_id = ? ORDER BY numero_linea DESC LIMIT 15",
         (run["id"],),
     ).fetchall()
+    sitio = db.execute(
+        "SELECT estado, retirado_en, cuarentena_hasta, liberado_en FROM sites WHERE id = ?",
+        (run["site_id"],),
+    ).fetchone()
     return {
-        "id": run["id"], "estado": run["estado"], "simulado": bool(run["simulado"]),
+        "id": run["id"], "sitio_id": run["site_id"], "tipo": run["tipo"], "estado": run["estado"], "simulado": bool(run["simulado"]),
         "automatico": db.execute("SELECT 1 FROM runner_jobs WHERE run_id = ?", (run["id"],)).fetchone() is not None,
         "codigo_salida": run["codigo_salida"],
-        "estado_sitio": db.execute("SELECT estado FROM sites WHERE id = ?", (run["site_id"],)).fetchone()[0],
+        "estado_sitio": sitio["estado"],
+        "cuarentena": {key: sitio[key] for key in ("retirado_en", "cuarentena_hasta", "liberado_en")},
         "resumen": {key: run[key] for key in ("ok_count", "changed_count", "failed_count")},
         "porcentaje": round(100 * hechos / len(pasos)), "hechos": hechos, "total": len(pasos),
         "pasos": pasos, "salida": [row["texto"] for row in reversed(lineas)],
     }
 
 
-def _ultima_alta(db, sitio_id):
+def _ultima_operacion(db, sitio_id):
     return db.execute(
-        "SELECT * FROM runs WHERE site_id = ? AND tipo = 'alta' ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM runs WHERE site_id = ? ORDER BY id DESC LIMIT 1",
         (sitio_id,),
     ).fetchone()
 
@@ -126,10 +151,10 @@ def consultar_progreso(database, *, sitio_id=None, run_id=None):
             run = db.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
             return _snapshot(db, run) if run is not None else None
         sitio = db.execute("SELECT id FROM sites WHERE id = ?", (sitio_id,)).fetchone()
-        return _snapshot(db, _ultima_alta(db, sitio_id)) if sitio is not None else None
+        return _snapshot(db, _ultima_operacion(db, sitio_id)) if sitio is not None else None
 
 
-def simular(database, sitio_id, accion):
+def simular(database, sitio_id, accion, *, validar_modalidad=None):
     if accion not in ("avanzar", "fallar"):
         raise ValueError("Acción de simulación inválida.")
     with transaction(database) as db:
@@ -140,13 +165,15 @@ def simular(database, sitio_id, accion):
         ).fetchone()
         if sitio is None:
             return None
-        run = _ultima_alta(db, sitio_id)
+        run = _ultima_operacion(db, sitio_id)
         if (not sitio["gestionado"] or sitio["estado"] != "aprovisionando"
                 or (run is not None and (
                     not run["simulado"] or run["estado"] != "en_curso"
                     or db.execute("SELECT 1 FROM runner_jobs WHERE run_id = ?", (run["id"],)).fetchone()
                 ))):
             raise ProgresoNoDisponible("La simulación no está disponible para esta ficha.")
+        if validar_modalidad is not None:
+            validar_modalidad(db)
         fecha = ahora_utc().isoformat()
         if run is None:
             run_id = crear_alta(db, sitio_id, simulado=True, fecha=fecha)
@@ -168,4 +195,4 @@ def simular(database, sitio_id, accion):
         )
         if not fallo and orden < len(ETAPAS_ALTA):
             aplicar_evento(db, run_id, orden + 1, "en_curso", fecha=fecha)
-        return _snapshot(db, _ultima_alta(db, sitio_id))
+        return _snapshot(db, _ultima_operacion(db, sitio_id))

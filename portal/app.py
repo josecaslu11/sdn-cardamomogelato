@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 
 from ansible_files import AnsibleFiles, InventoryError, dynamic_inventory, host_vars
-from db import detalle_sitio, initialize, listado_ipam, resumen_sitios, vista_inventario
+from db import bitacora, detalle_sitio, initialize, listado_ipam, resumen_sitios, transaction, vista_inventario
 from ipam import IPAM, SITE_CODE, SITE_NAME
 from progress import ProgresoNoDisponible, consultar_progreso, simular
 from runner import AltaRunner, ROUTERS, RunnerBusy, RunnerError
@@ -80,13 +80,26 @@ def create_app(env_file=None, *, database=None, config_file=None):
             publicado is not None and sitio["router"] in ROUTERS
             and sitio["estado"] in ("aprovisionando", "fallido")
         )
-        if (permitir_simular or permitir_aprovisionar) and "csrf_token" not in session:
+        permitir_aprovisionar = permitir_aprovisionar and not (
+            sitio["estado"] == "fallido" and progreso["tipo"] == "baja"
+        )
+        permitir_baja = publicado is not None and sitio["router"] in ROUTERS and (
+            sitio["estado"] == "activo" or (sitio["estado"] == "fallido" and progreso["tipo"] == "baja")
+        )
+        permitir_baja = permitir_baja and progreso.get("codigo_salida") != -128
+        permitir_liberar = (
+            sitio["router"] in ROUTERS and sitio["estado"] == "retirado"
+            and sitio["cuarentena_hasta"] is not None and sitio["liberado_en"] is None
+        )
+        if "csrf_token" not in session:
             session["csrf_token"] = token_hex(32)
         return render_template(
             "site_detail.html",
             progreso=progreso,
             permitir_simular=permitir_simular,
             permitir_aprovisionar=permitir_aprovisionar,
+            permitir_baja=permitir_baja,
+            permitir_liberar=permitir_liberar,
             sitio=sitio,
             asignaciones=asignaciones,
             inventario_yaml=dynamic_inventory(registrados),
@@ -121,8 +134,11 @@ def create_app(env_file=None, *, database=None, config_file=None):
         if not 0 < sitio_id < 2**63:
             return jsonify(error="El sitio solicitado no existe."), 404
         try:
-            progreso = simular(ipam.database, sitio_id, request.form.get("accion"))
-        except ProgresoNoDisponible as exc:
+            progreso = simular(
+                ipam.database, sitio_id, request.form.get("accion"),
+                validar_modalidad=files.ensure_mode,
+            )
+        except (ProgresoNoDisponible, InventoryError) as exc:
             return jsonify(error=str(exc)), 409
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
@@ -133,22 +149,77 @@ def create_app(env_file=None, *, database=None, config_file=None):
     @app.post("/sitios/<int:sitio_id>/aprovisionar")
     @login_required
     def provision_site(sitio_id):
+        return iniciar_operacion(sitio_id, "alta")
+
+    @app.post("/sitios/<int:sitio_id>/baja")
+    @login_required
+    def retire_site(sitio_id):
+        return iniciar_operacion(sitio_id, "baja")
+
+    def iniciar_operacion(sitio_id, tipo):
         csrf = session.get("csrf_token")
         if csrf is None or not compare_digest(request.form.get("csrf_token", "").encode(), csrf.encode()):
             return jsonify(error="La solicitud no es válida. Recarga la página."), 403
         if not 0 < sitio_id < 2**63:
             return jsonify(error="El sitio solicitado no existe."), 404
         try:
-            run_id = runner.iniciar(sitio_id, username, request.form.get("resultado", "exito"))
+            run_id = runner.iniciar(
+                sitio_id, username, request.form.get("resultado", "exito"),
+                tipo=tipo, confirmacion=request.form.get("confirmacion"),
+            )
         except RunnerBusy as exc:
             return jsonify(error=str(exc)), 409
-        except (RunnerError, ValueError) as exc:
+        except (RunnerError, InventoryError, ValueError) as exc:
             return jsonify(error=str(exc)), 400
         except (OSError, sqlite3.Error):
             return jsonify(error="No se pudo preparar la ejecución."), 500
         if run_id is None:
             return jsonify(error="El sitio solicitado no existe."), 404
         return jsonify(consultar_progreso(ipam.database, run_id=run_id)), 202
+
+    @app.post("/sitios/<int:sitio_id>/liberar-cuarentena")
+    @login_required
+    def release_quarantine(sitio_id):
+        csrf = session.get("csrf_token")
+        if csrf is None or not compare_digest(request.form.get("csrf_token", "").encode(), csrf.encode()):
+            return jsonify(error="La solicitud no es válida. Recarga la página."), 403
+        if not 0 < sitio_id < 2**63 or detalle_sitio(ipam.database, sitio_id) is None:
+            return jsonify(error="El sitio solicitado no existe."), 404
+        try:
+            with transaction(ipam.database) as db:
+                files.ensure_mode(db)
+                ipam.liberar_cuarentena(
+                    sitio_id, request.form.get("confirmacion"), usuario=username, conexion=db
+                )
+        except (InventoryError, ValueError) as exc:
+            flash(str(exc), "error")
+        else:
+            flash("Cuarentena liberada.")
+        return redirect(url_for("site_detail", sitio_id=sitio_id), code=303)
+
+    @app.get("/bitacora")
+    @login_required
+    def audit():
+        filtros = {campo: request.args.get(campo, "") for campo in ("router", "operacion", "resultado")}
+        return render_template("audit.html", eventos=bitacora(ipam.database, **filtros),
+                               filtros=filtros, routers=sorted(ROUTERS, key=lambda r: int(r[1:])))
+
+    @app.get("/sitios/<int:sitio_id>/historial")
+    @login_required
+    def site_history(sitio_id):
+        detalle = detalle_sitio(ipam.database, sitio_id) if 0 < sitio_id < 2**63 else None
+        if detalle is None:
+            return render_template("site_not_found.html"), 404
+        return render_template("audit.html", sitio=detalle[0],
+                               eventos=bitacora(ipam.database, sitio_id=sitio_id))
+
+    @app.get("/runs/<int:run_id>")
+    @login_required
+    def run_history(run_id):
+        progreso = consultar_progreso(ipam.database, run_id=run_id) if 0 < run_id < 2**63 else None
+        if progreso is None:
+            return render_template("site_not_found.html"), 404
+        return render_template("run_history.html", progreso=progreso)
 
     @app.get("/ipam")
     @login_required

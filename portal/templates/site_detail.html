@@ -7,6 +7,10 @@
     <h1>{{ sitio.site_name }}</h1>
     <span id="site-state" class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}{% if progreso.automatico and progreso.simulado %} · Simulado{% endif %}</span>
 </div>
+<p><a href="{{ url_for('site_history', sitio_id=sitio.id) }}">Historial de operaciones</a></p>
+{% for categoria, mensaje in get_flashed_messages(with_categories=true) %}
+<p class="notice{% if categoria == 'error' %} error{% endif %}" role="status">{{ mensaje }}</p>
+{% endfor %}
 <dl class="panel site-facts">
     <div><dt>Router</dt><dd>{{ sitio.router }}</dd></div>
     <div><dt>N.º de sitio</dt><dd>{{ sitio.site_id }}</dd></div>
@@ -16,13 +20,26 @@
     <div><dt>Interfaz LAN</dt><dd>{{ sitio.lan_if }}</dd></div>
     {% for campo, etiqueta in (
         ('creado_en', 'Creado'),
-        ('retirado_en', 'Retirado'),
+        ('retirado_en', 'Inicio de cuarentena'),
         ('cuarentena_hasta', 'Cuarentena hasta'),
         ('liberado_en', 'Liberado')
-    ) if sitio[campo] %}
-    <div><dt>{{ etiqueta }}</dt><dd><time datetime="{{ sitio[campo] }}">{{ sitio[campo] }}</time></dd></div>
+    ) %}
+    <div data-site-date="{{ campo }}"{% if not sitio[campo] %} hidden{% endif %}>
+        <dt>{{ etiqueta }}</dt><dd><time{% if sitio[campo] %} datetime="{{ sitio[campo] }}"{% endif %}>{{ sitio[campo] or '' }}</time></dd>
+    </div>
     {% endfor %}
 </dl>
+{% if permitir_liberar or permitir_baja %}
+<form id="release-quarantine" class="panel form-panel" method="post"
+      action="{{ url_for('release_quarantine', sitio_id=sitio.id) }}"{% if not permitir_liberar %} hidden{% endif %}>
+    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+    <div class="field">
+        <label for="release-confirm">Para confirmar la liberación de cuarentena, escribe {{ sitio.codigo }}</label>
+        <input type="text" id="release-confirm" name="confirmacion" required>
+    </div>
+    <button class="button" type="submit">Liberar cuarentena</button>
+</form>
+{% endif %}
 <div class="site-detail">
     <section>
         <h2>Qué se asignó</h2>

@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
     codigo_salida INTEGER,
     resumen TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_releases (
+    log_id INTEGER PRIMARY KEY REFERENCES audit_log(id),
+    sitio_id INTEGER NOT NULL REFERENCES sites(id)
+);
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
     site_id INTEGER NOT NULL REFERENCES sites(id),
@@ -70,6 +74,14 @@ DROP INDEX IF EXISTS runs_simulado_alta;
 CREATE TABLE IF NOT EXISTS runner_jobs (
     run_id INTEGER PRIMARY KEY REFERENCES runs(id),
     usuario TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bajas_pendientes (
+    sitio_id INTEGER PRIMARY KEY REFERENCES sites(id),
+    run_id INTEGER NOT NULL REFERENCES runs(id)
+);
+CREATE TABLE IF NOT EXISTS portal_inventory_mode (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    simulado INTEGER NOT NULL CHECK (simulado IN (0, 1))
 );
 CREATE TABLE IF NOT EXISTS run_steps (
     id INTEGER PRIMARY KEY,
@@ -119,6 +131,10 @@ def resumen_sitios(database):
             """SELECT s.id, s.site_name, s.router, s.site_id, s.estado,
                       (SELECT r.simulado FROM runs r JOIN runner_jobs j ON j.run_id = r.id
                        WHERE r.site_id = s.id ORDER BY r.id DESC LIMIT 1) AS alta_simulada,
+                      (SELECT ROUND(100.0 * SUM(estado = 'ok') / COUNT(*))
+                       FROM run_steps WHERE run_id = (
+                           SELECT id FROM runs WHERE site_id = s.id ORDER BY id DESC LIMIT 1
+                       )) AS progreso,
                       v4.valor AS lan_v4, v6.valor AS lan_v6
                FROM sites AS s
                LEFT JOIN allocations AS v4 ON v4.sitio_id = s.id AND v4.recurso = 'lan_v4'
@@ -199,3 +215,30 @@ def vista_inventario(database):
     with closing(sqlite3.connect(database)) as db:
         db.row_factory = sqlite3.Row
         return sitios_inventario(db)
+
+def bitacora(database, *, sitio_id=None, router="", operacion="", resultado=""):
+    with closing(sqlite3.connect(database)) as db:
+        db.row_factory = sqlite3.Row
+        return db.execute(
+            """WITH eventos AS (
+                   SELECT r.inicio AS fecha, j.usuario, r.tipo AS operacion, s.router,
+                          r.simulado, r.codigo_salida, r.estado AS resultado,
+                          COALESCE((SELECT texto FROM run_log WHERE run_id = r.id
+                                    ORDER BY numero_linea DESC LIMIT 1), '') AS resumen,
+                          r.id AS run_id, s.id AS sitio_id,
+                          strftime('%s', r.fin) - strftime('%s', r.inicio) AS segundos
+                   FROM runs r JOIN runner_jobs j ON j.run_id = r.id JOIN sites s ON s.id = r.site_id
+                   UNION ALL
+                   SELECT a.fecha, a.usuario, 'liberar', a.router,
+                          (SELECT simulado FROM portal_inventory_mode WHERE id = 1),
+                          a.codigo_salida, 'ok', a.resumen, NULL, l.sitio_id, NULL
+                   FROM audit_log a JOIN audit_releases l ON l.log_id = a.id
+               )
+               SELECT * FROM eventos
+               WHERE (:sitio_id IS NULL OR sitio_id = :sitio_id)
+                 AND (:router = '' OR router = :router)
+                 AND (:operacion = '' OR operacion = :operacion)
+                 AND (:resultado = '' OR resultado = :resultado)
+               ORDER BY fecha DESC, run_id DESC""",
+            {"sitio_id": sitio_id, "router": router, "operacion": operacion, "resultado": resultado},
+        ).fetchall()

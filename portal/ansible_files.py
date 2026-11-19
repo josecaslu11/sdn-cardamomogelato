@@ -83,8 +83,27 @@ class AnsibleFiles:
         ):
             raise InventoryError("El destino de desarrollo coincide con un inventario real.")
 
+    def ensure_mode(self, db):
+        opposite = db.execute(
+            """SELECT simulado FROM portal_inventory_mode WHERE id = 1 AND simulado <> ?
+               UNION ALL SELECT r.simulado FROM runs r JOIN runner_jobs j ON j.run_id = r.id
+               WHERE r.simulado <> ? LIMIT 1""",
+            (self.dry_run, self.dry_run),
+        ).fetchone()
+        if opposite is not None:
+            raise InventoryError("Usa bases independientes para inventarios simulados y reales.")
+        db.execute("INSERT OR IGNORE INTO portal_inventory_mode VALUES (1, ?)", (self.dry_run,))
+
+    def retirement_files(self, db, site):
+        router = valid_router(site)
+        return {
+            self.directory / "sitios.yml": dynamic_inventory(sitios_inventario(db)),
+            self.directory / "host_vars" / f"{router}.yml": None,
+        }
+
     def reserve(self, ipam, valores, usuario):
         with transaction(ipam.database) as db:
+            self.ensure_mode(db)
             site = ipam.reservar_sitio(**valores, usuario=usuario, conexion=db)
             sites = sitios_inventario(db)
             files = {
@@ -108,12 +127,15 @@ class AnsibleFiles:
                 originals[path] = (
                     stage(path, path.read_bytes(), mode, cleanup) if path.exists() else None
                 )
-                staged[path] = stage(path, content.encode("utf-8"), mode, cleanup)
+                staged[path] = stage(path, content.encode("utf-8"), mode, cleanup) if content is not None else None
 
             published = []
             try:
                 for path, source in staged.items():
-                    os.replace(source, path)
+                    if source is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        os.replace(source, path)
                     published.append(path)
                 yield
             except BaseException:
@@ -121,7 +143,7 @@ class AnsibleFiles:
                 for path in reversed(published):
                     try:
                         if originals[path] is None:
-                            path.unlink()
+                            path.unlink(missing_ok=True)
                         else:
                             os.replace(originals[path], path)
                     except OSError:

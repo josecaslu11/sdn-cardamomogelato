@@ -1,5 +1,33 @@
 # Portal SDN Cardamomo Gelato
 
+## Instalación local
+
+El portal requiere Linux o WSL2, Python 3.10 o posterior y SQLite 3.35 o
+posterior. Desde `portal/`:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp -n config.example.yml config.yml
+cp -n .env.example .env
+```
+
+Configura las credenciales locales del portal en `.env`. Para asegurar
+la continuidad de las sesiones al reiniciar, asigna una clave aleatoria
+propia a `PORTAL_SECRET_KEY`. Luego inicializa los datos de ejemplo y
+arranca Flask:
+
+```bash
+python seed.py
+python -m pytest -q
+python -m flask --app app run
+```
+
+Abre `http://127.0.0.1:5000/`. El seed puede repetirse y conserva sitios,
+asignaciones e historial. Para una prueba desechable, usa las rutas
+temporales de los apartados siguientes.
+
 ## IPAM y SQLite
 
 Desde `portal/`, activa el entorno virtual e instala los requisitos con
@@ -176,3 +204,52 @@ archivo de bloqueo adyacente. Solo se ejecuta una alta a la vez. El plazo
 máximo es de diez minutos. SQLite conserva los eventos reconocidos, los
 conteos de Ansible y el resultado de la ejecución. Una ejecución que quede
 interrumpida se registra como fallida cuando el portal recupera el bloqueo.
+
+## Baja, cuarentena e historial
+
+Con `PORTAL_DRY_RUN=1`, registra una sucursal y aprovisiónala con el
+resultado **Éxito**. Abre su ficha, escribe su código exacto y pulsa
+**Dar de baja**. El progreso sigue las tareas de `decommission`. Si la
+baja se completa, la ficha indica el inicio y el fin de cuarentena y el
+portal quita el router del inventario dinámico.
+
+Con **Tarea fallida**, la ficha ofrece **Reintentar baja**. Las direcciones
+y ambos archivos se conservan. Si el playbook termina bien y falla el
+cierre local, el portal conserva un recibo en SQLite y el reintento solo
+completa el inventario y la cuarentena. Los códigos internos negativos
+`-127` y `-128` indican, respectivamente, cierre local pendiente y resultado
+remoto sin confirmación durable. Para `-128`, conserva la reserva y verifica
+la VM y SQLite antes de cualquier intervención. Una caída entre la respuesta
+de Ansible y la escritura del recibo también puede exigir reconciliación.
+
+Una reserva posterior libera las cuarentenas vencidas. Para liberar una
+cuarentena antes, escribe el código del sitio nuevamente en la ficha. La
+acción queda registrada y la ficha anterior conserva su historial cuando
+otro sitio recibe el mismo router. Consulta **Bitácora** para filtrar por
+router, operación o resultado. El **Historial de operaciones** de la ficha
+enlaza a cada intento y su salida resumida.
+
+## Instalación en la VM de Ansible
+
+1. Usa el repositorio existente de Ansible y coloca el portal en su carpeta
+   `portal/`. Instala Python, crea el entorno virtual del portal e instala
+   sus dependencias como en la instalación local. En el entorno de Ansible
+   instala las colecciones declaradas en el `requirements.yml` del proyecto.
+2. Prepara una base SQLite de producción independiente. Configura
+   `PORTAL_DB_PATH`, `PORTAL_ANSIBLE_DIR`, `PORTAL_ANSIBLE_PLAYBOOK_BIN` y
+   `PORTAL_VAULT_PASSWORD_FILE`. Mantén la contraseña del Vault fuera del
+   repositorio y verifica los permisos y la accesibilidad del inventario.
+3. Antes de inicializar el pool de producción, confirma el estado real de
+   sus routers con el responsable de Ansible. Los estados de `seed.py` son
+   datos de ejemplo. Si ya hay un sitio gestionado en la VM, reconcilia su
+   reserva y el inventario antes de habilitar operaciones.
+4. Obtén la plantilla Day-0 oficial y confirma cada router preparado. Antes
+   de la primera alta, coordina con el responsable de la VM la validación de
+   Zabbix mediante `test_zabbix.yml` y `zabbix_setup.yml`.
+5. Activa `PORTAL_DRY_RUN=0` para la integración autorizada. Comprueba en la
+   VM un alta, una baja y un fallo controlado. Los procesos que sirven el
+   portal deben compartir SQLite, el archivo de bloqueo y el inventario.
+
+Quedan pendientes la plantilla Day-0, la confirmación de la copia de
+seguridad prevista por la guía y la validación de extremo a extremo con
+la VM, los routers y Zabbix.

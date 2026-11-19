@@ -14,6 +14,7 @@
             <nav class="portal-nav" aria-label="Navegación principal">
                 <a href="{{ url_for('sites') }}">Sitios</a>
                 <a href="{{ url_for('ipam_list') }}">IPAM</a>
+                <a href="{{ url_for('audit') }}">Bitácora</a>
             </nav>
             <form method="post" action="{{ url_for('logout') }}">
                 <button class="button secondary" type="submit">Cerrar sesión</button>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Historial' if sitio else 'Bitácora' }}{% endblock %}
+{% block content %}
+{% if sitio %}
+<a href="{{ url_for('site_detail', sitio_id=sitio.id) }}">Volver a {{ sitio.site_name }}</a>
+<h1>Historial de {{ sitio.site_name }}</h1>
+{% else %}
+<h1>Bitácora</h1>
+<form class="panel filters" method="get">
+    <div class="field">
+        <label for="router">Router</label>
+        <select id="router" name="router">
+            <option value="">Todos</option>
+            {% for router in routers %}<option{% if filtros.router == router %} selected{% endif %}>{{ router }}</option>{% endfor %}
+        </select>
+    </div>
+    <div class="field">
+        <label for="operacion">Operación</label>
+        <select id="operacion" name="operacion">
+            <option value="">Todas</option>
+            {% for valor, texto in [('alta', 'Alta'), ('baja', 'Baja'), ('liberar', 'Liberación de cuarentena')] %}
+            <option value="{{ valor }}"{% if filtros.operacion == valor %} selected{% endif %}>{{ texto }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="field">
+        <label for="resultado">Resultado</label>
+        <select id="resultado" name="resultado">
+            <option value="">Todos</option>
+            {% for valor, texto in [('ok', 'Correcto'), ('error', 'Fallido'), ('en_curso', 'En ejecución')] %}
+            <option value="{{ valor }}"{% if filtros.resultado == valor %} selected{% endif %}>{{ texto }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button class="button" type="submit">Filtrar</button>
+    <a href="{{ url_for('audit') }}">Limpiar filtros</a>
+</form>
+{% endif %}
+{% if eventos %}
+<div class="table-wrap" role="region" aria-label="Operaciones" tabindex="0">
+    <table>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Operación</th><th>Router</th><th>Modalidad</th><th>Código</th><th>Resultado</th><th>Duración</th></tr></thead>
+        <tbody>
+        {% for evento in eventos %}
+        <tr>
+            <td><time datetime="{{ evento.fecha }}">{{ evento.fecha }}</time></td>
+            <td>{{ evento.usuario }}</td>
+            <td>{% set nombre = 'Liberación de cuarentena' if evento.operacion == 'liberar' else evento.operacion | capitalize %}
+            {% if evento.run_id %}<a href="{{ url_for('run_history', run_id=evento.run_id) }}">{{ nombre }}</a>{% else %}{{ nombre }}{% endif %}</td>
+            <td><a href="{{ url_for('site_detail', sitio_id=evento.sitio_id) }}">{{ evento.router }}</a></td>
+            <td>{{ 'Simulada' if evento.simulado else ('Portal' if evento.simulado is none else 'Real') }}</td>
+            <td>{{ evento.codigo_salida if evento.codigo_salida is not none else '—' }}</td>
+            <td>{{ evento.resumen if evento.resultado != 'en_curso' else 'En ejecución' }}</td>
+            <td>{{ '%s s' | format(evento.segundos) if evento.segundos is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="panel">No se encontraron operaciones.</p>
+{% endif %}
+{% endblock %}

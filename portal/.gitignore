@@ -1,5 +1,6 @@
 .env
 .env.*
+!.env.example
 config.yml
 .venv/
 __pycache__/

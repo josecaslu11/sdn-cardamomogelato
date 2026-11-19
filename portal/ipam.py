@@ -45,11 +45,11 @@ def guardar_asignaciones(db, sitio, direcciones_sitio, estado, fecha):
 
 
 def registrar(db, fecha, usuario, accion, router, resumen, codigo=None):
-    db.execute(
+    return db.execute(
         """INSERT INTO audit_log (fecha, usuario, accion, router, codigo_salida, resumen)
            VALUES (?, ?, ?, ?, ?, ?)""",
         (fecha, usuario, accion, router, codigo, resumen),
-    )
+    ).lastrowid
 
 
 class IPAM:
@@ -85,10 +85,29 @@ class IPAM:
             (fecha, fecha),
         ).fetchall()
         for sitio in sitios:
-            self._estado_asignaciones(db, sitio["id"], "liberado", fecha)
-            db.execute("UPDATE nodes SET estado = 'disponible' WHERE router = ?", (sitio["router"],))
-            registrar(db, fecha, usuario, "liberar_cuarentena", sitio["router"], "Cuarentena vencida.")
+            self._liberar_recursos(db, sitio, fecha, usuario, "Cuarentena vencida.")
         return len(sitios)
+
+    def _liberar_recursos(self, db, sitio, fecha, usuario, resumen):
+        self._estado_asignaciones(db, sitio["id"], "liberado", fecha)
+        db.execute("UPDATE nodes SET estado = 'disponible' WHERE router = ?", (sitio["router"],))
+        log_id = registrar(db, fecha, usuario, "liberar_cuarentena", sitio["router"], resumen, 0)
+        db.execute("INSERT INTO audit_releases VALUES (?, ?)", (log_id, sitio["id"]))
+
+    def liberar_cuarentena(self, sitio_id, confirmacion, *, usuario, conexion):
+        fecha = self._ahora().isoformat()
+        sitio = conexion.execute(
+            """UPDATE sites SET liberado_en = ?
+               WHERE id = ? AND estado = 'retirado' AND cuarentena_hasta IS NOT NULL
+                 AND liberado_en IS NULL AND codigo COLLATE BINARY = ?
+                 AND router IN ('R7', 'R8', 'R9', 'R10')
+                 AND EXISTS (SELECT 1 FROM nodes n WHERE n.router = sites.router AND n.gestionado = 1)
+               RETURNING id, router""",
+            (fecha, sitio_id, confirmacion),
+        ).fetchone()
+        if sitio is None:
+            raise ValueError("El código no coincide o el sitio no tiene una cuarentena vigente.")
+        self._liberar_recursos(conexion, sitio, fecha, usuario, "Cuarentena liberada manualmente.")
 
     def liberar_vencidos(self, *, usuario="sistema"):
         with transaction(self.database) as db:
@@ -138,11 +157,11 @@ class IPAM:
     def finalizar_alta(self, site_id, codigo_salida, *, usuario="sistema", conexion=None):
         self._transicion(site_id, "finalizar_alta", usuario, codigo_salida, conexion=conexion)
 
-    def retirar_sitio(self, site_id, *, usuario="sistema"):
-        self._transicion(site_id, "iniciar_baja", usuario)
+    def retirar_sitio(self, site_id, *, usuario="sistema", conexion=None):
+        self._transicion(site_id, "iniciar_baja", usuario, conexion=conexion)
 
-    def finalizar_baja(self, site_id, codigo_salida, *, usuario="sistema"):
-        self._transicion(site_id, "finalizar_baja", usuario, codigo_salida)
+    def finalizar_baja(self, site_id, codigo_salida, *, usuario="sistema", conexion=None):
+        self._transicion(site_id, "finalizar_baja", usuario, codigo_salida, conexion=conexion)
 
     def _transicion(self, site_id, accion, usuario, codigo=None, *, conexion=None):
         if type(site_id) is not int or not 1 <= site_id <= 242:

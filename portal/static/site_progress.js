@@ -2,6 +2,12 @@ const panel = document.getElementById("site-progress");
 const bar = document.getElementById("progress-bar");
 const summary = document.getElementById("progress-summary");
 const form = document.getElementById("simulate-progress");
+const retire = document.getElementById("retire-site");
+const releaseQuarantine = document.getElementById("release-quarantine");
+const quarantineLink = document.getElementById("quarantine-link");
+const progressLabel = document.getElementById("progress-label");
+const stepList = panel.querySelector(".progress-steps");
+const stepTemplate = stepList.firstElementChild.cloneNode(true);
 const provision = document.getElementById("provision-site");
 const siteState = document.getElementById("site-state");
 const recap = document.getElementById("ansible-recap");
@@ -32,9 +38,17 @@ function render(progress) {
         const message = progress.salida.at(-1) ?? "";
         if (result.textContent !== message) result.textContent = message;
     }
+    progressLabel.textContent = `Progreso de ${progress.tipo}`;
+    while (stepList.childElementCount > progress.total) stepList.lastElementChild.remove();
     for (const step of progress.pasos) {
+        if (!stepList.querySelector(`[data-step="${step.orden}"]`)) {
+            const item = stepTemplate.cloneNode(true);
+            item.dataset.step = step.orden;
+            stepList.append(item);
+        }
         const row = panel.querySelector(`[data-step="${step.orden}"]`);
         row.dataset.state = step.estado;
+        row.querySelector(".step-name").textContent = step.nombre;
         row.querySelector("[data-label]").textContent = labels[step.estado];
         const failure = row.querySelector("[data-failure]");
         failure.hidden = step.estado !== "error" || !step.detalle;
@@ -45,8 +59,34 @@ function render(progress) {
             (progress.id !== null && !progress.simulado);
     }
     if (provision) {
-        provision.hidden = progress.estado_sitio === "activo" ||
+        provision.hidden = progress.estado_sitio === "activo" || progress.tipo === "baja" ||
             (progress.automatico && progress.estado === "en_curso");
+        if (progress.estado === "error" && progress.tipo === "alta") {
+            provision.querySelector("button").textContent = "Reintentar alta";
+        }
+    }
+    if (retire) {
+        retire.hidden = progress.estado_sitio === "retirado" ||
+            (progress.automatico && progress.estado === "en_curso");
+        if (progress.estado === "error" && progress.tipo === "baja") {
+            retire.querySelector("button").textContent = "Reintentar baja";
+        }
+    }
+    quarantineLink.hidden = !(progress.tipo === "baja" && progress.estado === "ok");
+    if (progress.cuarentena) {
+        for (const [field, value] of Object.entries(progress.cuarentena)) {
+            const row = document.querySelector(`[data-site-date="${field}"]`);
+            const time = row.querySelector("time");
+            row.hidden = !value;
+            if (value) {
+                time.dateTime = value;
+                time.textContent = value;
+            }
+        }
+        if (releaseQuarantine) {
+            releaseQuarantine.hidden = !(progress.estado_sitio === "retirado" &&
+                progress.cuarentena.cuarentena_hasta && !progress.cuarentena.liberado_en);
+        }
     }
 }
 
@@ -84,7 +124,7 @@ function schedulePoll() {
     }, 2000);
 }
 
-for (const action of [form, provision].filter(Boolean)) {
+for (const action of [form, provision, retire].filter(Boolean)) {
     action.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (sending) return;

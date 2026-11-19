@@ -407,3 +407,71 @@ def test_aprovisionar_requiere_sesion_csrf_y_es_asincrono(alta_en_progreso, monk
     assert '<dd id="activos">4</dd>' in pagina
     client.post("/logout")
     assert client.post("/sitios/5/aprovisionar").location == "/login"
+
+
+@pytest.mark.parametrize(("method", "path"), [
+    ("POST", "/sitios/5/baja"), ("POST", "/sitios/5/liberar-cuarentena"),
+    ("GET", "/bitacora"), ("GET", "/sitios/5/historial"), ("GET", "/runs/1"),
+])
+def test_baja_e_historial_exigen_autenticacion(client, method, path):
+    assert client.open(path, method=method).location == "/login"
+
+
+def test_baja_liberacion_manual_e_historial_en_flask(alta_en_progreso, ipam, monkeypatch):
+    from test_runner import esperar
+
+    client = alta_en_progreso
+    instance, _ = ipam
+    monkeypatch.setattr("runner.sleep", lambda _: None)
+
+    def operacion(path, **datos):
+        client.get("/sitios/5")
+        with client.session_transaction() as session:
+            datos["csrf_token"] = session["csrf_token"]
+        return client.post(path, data=datos)
+
+    def terminar(response):
+        from fcntl import LOCK_EX, flock
+
+        assert response.status_code == 202
+        run_id = response.get_json()["id"]
+        progreso = esperar(instance.database, run_id)
+        with instance.database.with_name(instance.database.name + ".runner.lock").open("rb") as lock:
+            flock(lock, LOCK_EX)
+        return progreso
+
+    alta = terminar(operacion("/sitios/5/aprovisionar"))
+    assert client.post("/sitios/5/baja").status_code == 403
+    assert operacion("/sitios/5/baja", confirmacion="incorrecto").status_code == 400
+    fallo = terminar(operacion("/sitios/5/baja", confirmacion="ESCUINTLA", resultado="fallo"))
+    assert "Reintentar baja" in client.get("/sitios/5").get_data(as_text=True)
+    liberacion = "/sitios/5/liberar-cuarentena"
+    assert operacion(liberacion, confirmacion="ESCUINTLA").status_code == 303
+    with transaction(instance.database) as db:
+        assert db.execute("SELECT liberado_en FROM sites WHERE id = 5").fetchone()[0] is None
+    baja = terminar(operacion("/sitios/5/baja", confirmacion="ESCUINTLA"))
+    assert baja["id"] != fallo["id"]
+    ficha = client.get("/sitios/5").get_data(as_text=True)
+    assert "Inicio de cuarentena" in ficha
+    assert "Cuarentena hasta" in ficha
+    assert "Liberar cuarentena" in ficha
+    assert operacion(liberacion, confirmacion="incorrecto").status_code == 303
+    with transaction(instance.database) as db:
+        assert db.execute("SELECT liberado_en FROM sites WHERE id = 5").fetchone()[0] is None
+    assert operacion(liberacion, confirmacion="ESCUINTLA").status_code == 303
+
+    assert reservar(client, nombre="Otra", codigo="OTRA").status_code == 303
+    with transaction(instance.database) as db:
+        assert db.execute("SELECT router FROM sites WHERE codigo = 'OTRA'").fetchone()[0] == "R7"
+        assert db.execute("SELECT DISTINCT estado FROM allocations WHERE sitio_id = 5").fetchone()[0] == "liberado"
+    historial = client.get("/sitios/5/historial").get_data(as_text=True)
+    for run in (alta, fallo, baja):
+        assert f'/runs/{run["id"]}' in historial
+    assert "Cuarentena liberada manualmente" in historial
+    assert "No se encontraron operaciones" in client.get("/sitios/6/historial").get_data(as_text=True)
+    filtro = client.get("/bitacora?router=R7&operacion=baja&resultado=error").get_data(as_text=True)
+    assert f'/runs/{fallo["id"]}' in filtro
+    assert f'/runs/{alta["id"]}' not in filtro
+    assert f'/runs/{baja["id"]}' not in filtro
+    assert "Simulada" in filtro
+    assert "Salida resumida" in client.get(f'/runs/{baja["id"]}').get_data(as_text=True)
