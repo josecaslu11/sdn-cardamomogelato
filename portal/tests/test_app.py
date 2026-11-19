@@ -386,3 +386,24 @@ def test_eventos_de_una_ejecucion_no_simulada(alta_en_progreso, ipam):
     assert progreso["simulado"] is False
     assert (progreso["hechos"], progreso["porcentaje"]) == (1, 9)
     assert simular_etapa(alta_en_progreso, "avanzar").status_code == 409
+
+
+def test_aprovisionar_requiere_sesion_csrf_y_es_asincrono(alta_en_progreso, monkeypatch, ipam):
+    from test_runner import esperar
+
+    client = alta_en_progreso
+    assert client.post("/sitios/5/aprovisionar").status_code == 403
+    assert "Aprovisionar" in client.get("/sitios/5").get_data(as_text=True)
+    assert "Aprovisionar" not in client.get("/sitios/1").get_data(as_text=True)
+    with client.session_transaction() as session:
+        csrf = session["csrf_token"]
+    monkeypatch.setattr("runner.sleep", lambda _: None)
+    response = client.post("/sitios/5/aprovisionar", data={"csrf_token": csrf})
+    assert response.status_code == 202
+    instance, _ = ipam
+    esperar(instance.database, response.get_json()["id"])
+    pagina = client.get("/").get_data(as_text=True)
+    assert "Activo · Simulado" in pagina
+    assert '<dd id="activos">4</dd>' in pagina
+    client.post("/logout")
+    assert client.post("/sitios/5/aprovisionar").location == "/login"

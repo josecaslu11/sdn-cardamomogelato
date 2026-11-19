@@ -82,7 +82,7 @@ def aplicar_evento(db, run_id, orden, estado, *, fecha, detalle=None):
 
 def _snapshot(db, run):
     if run is None:
-        return {"id": None, "estado": "pendiente", "simulado": False, "porcentaje": 0,
+        return {"id": None, "estado": "pendiente", "simulado": False, "automatico": False, "porcentaje": 0,
                 "hechos": 0, "total": len(ETAPAS_ALTA), "pasos": pasos_pendientes(), "salida": []}
     pasos = []
     ahora = ahora_utc()
@@ -102,6 +102,10 @@ def _snapshot(db, run):
     ).fetchall()
     return {
         "id": run["id"], "estado": run["estado"], "simulado": bool(run["simulado"]),
+        "automatico": db.execute("SELECT 1 FROM runner_jobs WHERE run_id = ?", (run["id"],)).fetchone() is not None,
+        "codigo_salida": run["codigo_salida"],
+        "estado_sitio": db.execute("SELECT estado FROM sites WHERE id = ?", (run["site_id"],)).fetchone()[0],
+        "resumen": {key: run[key] for key in ("ok_count", "changed_count", "failed_count")},
         "porcentaje": round(100 * hechos / len(pasos)), "hechos": hechos, "total": len(pasos),
         "pasos": pasos, "salida": [row["texto"] for row in reversed(lineas)],
     }
@@ -138,7 +142,10 @@ def simular(database, sitio_id, accion):
             return None
         run = _ultima_alta(db, sitio_id)
         if (not sitio["gestionado"] or sitio["estado"] != "aprovisionando"
-                or (run is not None and (not run["simulado"] or run["estado"] != "en_curso"))):
+                or (run is not None and (
+                    not run["simulado"] or run["estado"] != "en_curso"
+                    or db.execute("SELECT 1 FROM runner_jobs WHERE run_id = ?", (run["id"],)).fetchone()
+                ))):
             raise ProgresoNoDisponible("La simulación no está disponible para esta ficha.")
         fecha = ahora_utc().isoformat()
         if run is None:

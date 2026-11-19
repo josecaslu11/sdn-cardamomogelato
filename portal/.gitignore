@@ -7,3 +7,4 @@ __pycache__/
 /docs/
 /portal.sqlite3*
 /.ansible-dev/
+/portal.sqlite3.runner.lock

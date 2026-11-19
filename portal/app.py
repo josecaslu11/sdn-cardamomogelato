@@ -12,6 +12,7 @@ from ansible_files import AnsibleFiles, InventoryError, dynamic_inventory, host_
 from db import detalle_sitio, initialize, listado_ipam, resumen_sitios, vista_inventario
 from ipam import IPAM, SITE_CODE, SITE_NAME
 from progress import ProgresoNoDisponible, consultar_progreso, simular
+from runner import AltaRunner, ROUTERS, RunnerBusy, RunnerError
 
 
 LAN_INTERFACES = ("Ethernet0/1", "Ethernet0/2")
@@ -51,6 +52,9 @@ def create_app(env_file=None, *, database=None, config_file=None):
         name, settings.get(name, default)
     ))
 
+    runner = AltaRunner(ipam, files)
+    runner.recuperar()
+
     @app.get("/")
     @login_required
     def sites():
@@ -70,14 +74,19 @@ def create_app(env_file=None, *, database=None, config_file=None):
         progreso = consultar_progreso(ipam.database, sitio_id=sitio_id)
         permitir_simular = (
             files.dry_run and publicado is not None and sitio["estado"] == "aprovisionando"
-            and (progreso["id"] is None or progreso["simulado"])
+            and (progreso["id"] is None or (progreso["simulado"] and not progreso["automatico"]))
         )
-        if permitir_simular and "csrf_token" not in session:
+        permitir_aprovisionar = (
+            publicado is not None and sitio["router"] in ROUTERS
+            and sitio["estado"] in ("aprovisionando", "fallido")
+        )
+        if (permitir_simular or permitir_aprovisionar) and "csrf_token" not in session:
             session["csrf_token"] = token_hex(32)
         return render_template(
             "site_detail.html",
             progreso=progreso,
             permitir_simular=permitir_simular,
+            permitir_aprovisionar=permitir_aprovisionar,
             sitio=sitio,
             asignaciones=asignaciones,
             inventario_yaml=dynamic_inventory(registrados),
@@ -120,6 +129,26 @@ def create_app(env_file=None, *, database=None, config_file=None):
         if progreso is None:
             return jsonify(error="El sitio solicitado no existe."), 404
         return jsonify(progreso)
+
+    @app.post("/sitios/<int:sitio_id>/aprovisionar")
+    @login_required
+    def provision_site(sitio_id):
+        csrf = session.get("csrf_token")
+        if csrf is None or not compare_digest(request.form.get("csrf_token", "").encode(), csrf.encode()):
+            return jsonify(error="La solicitud no es válida. Recarga la página."), 403
+        if not 0 < sitio_id < 2**63:
+            return jsonify(error="El sitio solicitado no existe."), 404
+        try:
+            run_id = runner.iniciar(sitio_id, username, request.form.get("resultado", "exito"))
+        except RunnerBusy as exc:
+            return jsonify(error=str(exc)), 409
+        except (RunnerError, ValueError) as exc:
+            return jsonify(error=str(exc)), 400
+        except (OSError, sqlite3.Error):
+            return jsonify(error="No se pudo preparar la ejecución."), 500
+        if run_id is None:
+            return jsonify(error="El sitio solicitado no existe."), 404
+        return jsonify(consultar_progreso(ipam.database, run_id=run_id)), 202
 
     @app.get("/ipam")
     @login_required

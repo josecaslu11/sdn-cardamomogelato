@@ -37,7 +37,7 @@
                 <td>{{ sitio.site_id }}</td>
                 <td><code>{{ sitio.lan_v4 or '—' }}</code></td>
                 <td><code>{{ sitio.lan_v6 or '—' }}</code></td>
-                <td><span class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}</span></td>
+                <td><span class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}{% if sitio.alta_simulada %} · Simulado{% endif %}</span></td>
             </tr>
             {% endfor %}
         </tbody>

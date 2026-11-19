@@ -155,9 +155,10 @@ Al finalizar:
 - Paso 3: formulario y listado de sitios completado.
 - Paso 4: detalle de sitios y asignaciones completado.
 - Paso 5: generación de archivos YAML implementada.
+- Paso 6: barra de progreso completada.
+- Paso actual: Paso 7, integración con Ansible.
 - Pendiente: plantilla oficial Day-0.
-- Paso actual: Paso 6, barra de progreso.
-- Pendiente: integración real con Ansible.
+- Pendiente: pruebas contra infraestructura real.
 
 ## Documentación de referencia
 

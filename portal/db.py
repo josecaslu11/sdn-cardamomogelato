@@ -66,8 +66,11 @@ CREATE TABLE IF NOT EXISTS runs (
     failed_count INTEGER
 );
 CREATE INDEX IF NOT EXISTS runs_por_sitio ON runs(site_id, id DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS runs_simulado_alta ON runs(site_id)
-    WHERE tipo = 'alta' AND simulado = 1;
+DROP INDEX IF EXISTS runs_simulado_alta;
+CREATE TABLE IF NOT EXISTS runner_jobs (
+    run_id INTEGER PRIMARY KEY REFERENCES runs(id),
+    usuario TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS run_steps (
     id INTEGER PRIMARY KEY,
     run_id INTEGER NOT NULL REFERENCES runs(id),
@@ -114,6 +117,8 @@ def resumen_sitios(database):
         db.execute("BEGIN")
         sitios = db.execute(
             """SELECT s.id, s.site_name, s.router, s.site_id, s.estado,
+                      (SELECT r.simulado FROM runs r JOIN runner_jobs j ON j.run_id = r.id
+                       WHERE r.site_id = s.id ORDER BY r.id DESC LIMIT 1) AS alta_simulada,
                       v4.valor AS lan_v4, v6.valor AS lan_v6
                FROM sites AS s
                LEFT JOIN allocations AS v4 ON v4.sitio_id = s.id AND v4.recurso = 'lan_v4'
@@ -122,7 +127,10 @@ def resumen_sitios(database):
         ).fetchall()
         indicadores = db.execute(
             """SELECT
-                   (SELECT COUNT(*) FROM sites WHERE estado = 'activo') AS activos,
+                   (SELECT COUNT(*) FROM sites s WHERE s.estado = 'activo'
+                    AND COALESCE((SELECT r.simulado FROM runs r JOIN runner_jobs j ON j.run_id = r.id
+                                  WHERE r.site_id = s.id ORDER BY r.id DESC LIMIT 1), 0) = 0
+                   ) AS activos,
                    (SELECT COUNT(*) FROM nodes
                     WHERE gestionado = 1 AND estado = 'disponible') AS disponibles,
                    (SELECT COUNT(*) FROM sites WHERE estado = 'aprovisionando')

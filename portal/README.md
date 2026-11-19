@@ -142,3 +142,37 @@ JSON. Cuando exista una ejecución, también puedes consultarla con
 `aplicar_evento` para que un futuro proceso registre transiciones de etapas
 mediante identificador de ejecución y orden. La plantilla oficial Day-0
 sigue pendiente.
+
+## Aprovisionamiento automático
+
+La configuración predeterminada es `PORTAL_DRY_RUN=1`. Cualquier valor
+distinto de `0` o `1` se rechaza al arrancar.
+
+Para probar el alta automática, inicia Flask con una base y un inventario
+temporales como en **Archivos para Ansible**. Registra una sucursal, abre su
+ficha y pulsa **Aprovisionar**. El progreso avanza en segundo plano. Prueba
+**Tarea fallida** o **Router inalcanzable** en el selector de resultados.
+Las fichas y el listado identifican los resultados simulados, que se guardan
+en la base de desarrollo. Usa otra base de datos para producción.
+
+### Configuración para la VM
+
+Con `PORTAL_DRY_RUN=0`, configura `PORTAL_ANSIBLE_DIR`,
+`PORTAL_ANSIBLE_PLAYBOOK_BIN` y `PORTAL_VAULT_PASSWORD_FILE`. También se
+admiten sus campos equivalentes `ansible_dir`, `ansible_playbook_bin` y
+`vault_password_file` en `config.yml`. Las rutas relativas del ejecutable y
+del Vault se resuelven desde el proyecto Ansible. El archivo de contraseña
+debe estar fuera del proyecto con permisos `0600`, y `ansible-vault` debe
+estar junto a `ansible-playbook`.
+
+Define `PORTAL_DAY0_READY_ROUTERS` con los routers ya confirmados por el
+operador, separados por comas, por ejemplo `R7,R8`. El portal valida el
+inventario y comprueba que el Vault se pueda abrir sin guardar su contenido.
+También comprueba alcance TCP/22 antes de lanzar `site_add.yml`. La
+plantilla oficial Day-0 sigue pendiente y la prueba TCP no autentica SSH.
+
+Los procesos Flask de un mismo portal deben compartir la base SQLite y su
+archivo de bloqueo adyacente. Solo se ejecuta una alta a la vez. El plazo
+máximo es de diez minutos. SQLite conserva los eventos reconocidos, los
+conteos de Ansible y el resultado de la ejecución. Una ejecución que quede
+interrumpida se registra como fallida cuando el portal recupera el bloqueo.

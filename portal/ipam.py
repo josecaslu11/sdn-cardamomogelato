@@ -132,11 +132,11 @@ class IPAM:
             (estado, fecha, sitio_id),
         )
 
-    def reintentar_alta(self, site_id, *, usuario="sistema"):
-        self._transicion(site_id, "reintentar_alta", usuario)
+    def reintentar_alta(self, site_id, *, usuario="sistema", conexion=None):
+        self._transicion(site_id, "reintentar_alta", usuario, conexion=conexion)
 
-    def finalizar_alta(self, site_id, codigo_salida, *, usuario="sistema"):
-        self._transicion(site_id, "finalizar_alta", usuario, codigo_salida)
+    def finalizar_alta(self, site_id, codigo_salida, *, usuario="sistema", conexion=None):
+        self._transicion(site_id, "finalizar_alta", usuario, codigo_salida, conexion=conexion)
 
     def retirar_sitio(self, site_id, *, usuario="sistema"):
         self._transicion(site_id, "iniciar_baja", usuario)
@@ -144,12 +144,13 @@ class IPAM:
     def finalizar_baja(self, site_id, codigo_salida, *, usuario="sistema"):
         self._transicion(site_id, "finalizar_baja", usuario, codigo_salida)
 
-    def _transicion(self, site_id, accion, usuario, codigo=None):
+    def _transicion(self, site_id, accion, usuario, codigo=None, *, conexion=None):
         if type(site_id) is not int or not 1 <= site_id <= 242:
             raise ValueError("Número de sitio inválido.")
         if accion.startswith("finalizar") and type(codigo) is not int:
             raise ValueError("Se requiere un código de salida entero.")
-        with transaction(self.database) as db:
+        operacion = transaction(self.database) if conexion is None else nullcontext(conexion)
+        with operacion as db:
             nodo = db.execute("SELECT * FROM nodes WHERE site_id = ?", (site_id,)).fetchone()
             if nodo is None or not nodo["gestionado"]:
                 raise ValueError("El router no pertenece al pool administrable.")

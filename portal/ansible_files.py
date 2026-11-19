@@ -57,9 +57,16 @@ class AnsibleFiles:
         project = Path(setting("PORTAL_ANSIBLE_DIR") or config.get("ansible_dir") or ROOT.parent)
         if not project.is_absolute():
             project = ROOT / project
+        self.project = project.resolve()
+        self.playbook_bin = setting("PORTAL_ANSIBLE_PLAYBOOK_BIN") or config.get("ansible_playbook_bin")
+        self.vault_file = setting("PORTAL_VAULT_PASSWORD_FILE") or config.get("vault_password_file")
+        self.day0_ready = frozenset((setting("PORTAL_DAY0_READY_ROUTERS") or "").replace(" ", "").split(","))
         self.real_inventory = (project / "inventory").resolve()
         self.protected = (self.real_inventory, (ROOT.parent / "inventory").resolve())
-        self.dry_run = setting("PORTAL_DRY_RUN", "1") != "0"
+        dry_run = setting("PORTAL_DRY_RUN", "1")
+        if dry_run not in ("0", "1"):
+            raise ValueError("PORTAL_DRY_RUN debe ser 0 o 1.")
+        self.dry_run = dry_run == "1"
         development = Path(setting("PORTAL_DRY_RUN_DIR", ROOT / ".ansible-dev"))
         if not development.is_absolute():
             development = ROOT / development

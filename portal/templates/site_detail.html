@@ -5,7 +5,7 @@
 <a href="{{ url_for('sites') }}">Volver a la lista de sitios</a>
 <div class="page-heading">
     <h1>{{ sitio.site_name }}</h1>
-    <span class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}</span>
+    <span id="site-state" class="status status-{{ sitio.estado }}">{{ sitio.estado | capitalize }}{% if progreso.automatico and progreso.simulado %} · Simulado{% endif %}</span>
 </div>
 <dl class="panel site-facts">
     <div><dt>Router</dt><dd>{{ sitio.router }}</dd></div>

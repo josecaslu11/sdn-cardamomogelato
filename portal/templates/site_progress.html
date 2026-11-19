@@ -3,9 +3,10 @@
 <section class="panel site-actions" id="site-progress"
          data-url="{{ url_for('site_progress', sitio_id=sitio.id) }}"
          data-state="{{ progreso.estado }}"
+         data-automatic="{{ progreso.automatico | tojson }}"
          data-labels='{{ etiquetas | tojson }}'>
     <h2>Qué se hizo</h2>
-    <p id="simulation-notice"{% if not (progreso.simulado or permitir_simular) %} hidden{% endif %}>
+    <p id="simulation-notice"{% if not (progreso.simulado or permitir_simular or (dry_run and permitir_aprovisionar)) %} hidden{% endif %}>
         Simulación de aprovisionamiento
     </p>
     <label for="progress-bar">Progreso del alta</label>
@@ -28,6 +29,26 @@
         <button class="button simulate-failure" name="accion" value="fallar">Simular fallo</button>
     </form>
     {% endif %}
+    {% if permitir_aprovisionar %}
+    <form id="provision-site" action="{{ url_for('provision_site', sitio_id=sitio.id) }}" method="post"
+          {% if progreso.automatico and progreso.estado == 'en_curso' %}hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        {% if dry_run %}
+        <div class="field">
+            <label for="provision-result">Resultado simulado</label>
+            <select id="provision-result" name="resultado">
+                <option value="exito">Éxito</option>
+                <option value="fallo">Tarea fallida</option>
+                <option value="inalcanzable">Router inalcanzable</option>
+            </select>
+        </div>
+        {% endif %}
+        <button class="button" type="submit">Aprovisionar</button>
+    </form>
+    {% endif %}
+    {% set conteos = progreso.resumen %}
+    <p id="ansible-recap"{% if not conteos or conteos.ok_count is none %} hidden{% endif %}>{% if conteos %}Correctas: {{ conteos.ok_count }} · Cambios: {{ conteos.changed_count }} · Fallidas: {{ conteos.failed_count }}{% endif %}</p>
+    <p id="run-result" role="status">{{ progreso.salida[-1] if progreso.automatico and progreso.salida else '' }}</p>
     <p id="progress-error" role="alert" hidden></p>
 </section>
 <script defer src="{{ url_for('static', filename='site_progress.js') }}"></script>
