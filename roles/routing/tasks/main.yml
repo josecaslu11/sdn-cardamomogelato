@@ -13,6 +13,13 @@
       - "router-id {{ loopback_ip }}"
     save_when: modified
 
+- name: Loopback0 con la IP del sitio
+  cisco.ios.ios_config:
+    parents: interface Loopback0
+    lines:
+      - "ip address {{ loopback_ip }} 255.255.255.255"
+    save_when: modified
+
 - name: OSPF en Loopback0
   cisco.ios.ios_config:
     parents: interface Loopback0
