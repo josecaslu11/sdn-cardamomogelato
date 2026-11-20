@@ -9,7 +9,7 @@
 - name: Estado actual del router
   cisco.ios.ios_command:
     commands:
-      - "show running-config | include ^interface Tunnel|^router ospf|^ipv6 router ospf|^crypto"
+      - "show running-config | include ^interface Tunnel|^interface Loopback0|^router ospf|^ipv6 router ospf|^crypto"
       - "show running-config interface {{ lan_if }}"
   register: estado
   changed_when: false
@@ -36,6 +36,13 @@
       - "default interface {{ lan_if }}"
     save_when: modified
   when: "'ip address' in estado.stdout[1]"
+
+- name: Eliminar Loopback0 del sitio
+  cisco.ios.ios_config:
+    lines:
+      - no interface Loopback0
+    save_when: modified
+  when: "'interface Loopback0' in estado.stdout[0]"
 
 - name: Eliminar objetos IKEv2 e IPsec
   cisco.ios.ios_config:
